@@ -1,6 +1,8 @@
 # INR Currency Trend Predictor
 
 A machine learning pipeline for predicting INR/USD currency trends using XGBoost classification with technical indicators and macroeconomic features.
+<img width="1321" height="630" alt="image" src="https://github.com/user-attachments/assets/3a5d0217-3d2f-4140-b629-c999d2239f8c" />
+
 
 ## 📋 Project Overview
 
