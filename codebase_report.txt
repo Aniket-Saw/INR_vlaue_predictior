@@ -1,0 +1,2877 @@
+================================================================================
+PROJECT CODEBASE REPORT
+================================================================================
+Generated: 2026-04-10 01:48:49
+Root Directory: D:\ML_vit\Xg_bst
+Total Files: 9
+================================================================================
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+  1. .opencode\server.lock.json
+  2. README.md
+  3. app.py
+  4. dataset.py
+  5. generate_codebase_report.py
+  6. generate_workspace_summary.py
+  7. requirements.txt
+  8. workspace_summary.txt
+  9. xgboost_cprd.py
+
+================================================================================
+
+
+================================================================================
+FILE: .opencode\server.lock.json
+================================================================================
+{
+  "workspaceRoot": "d:\\ML_vit\\Xg_bst",
+  "port": 42072,
+  "password": "YkOB6MkbEUDTTaVm/E6X7DuOBIq8j9RVzykLUFt7+0I=",
+  "updatedAt": "2026-03-26T19:31:39.405Z"
+}
+
+
+================================================================================
+FILE: README.md
+================================================================================
+# INR Currency Trend Predictor
+
+A machine learning pipeline for predicting INR/USD currency trends using XGBoost classification with technical indicators and macroeconomic features.
+
+## 📋 Project Overview
+
+This project builds a professional ML pipeline that predicts the directional movement of the INR (Indian Rupee) against the USD. It combines:
+- **Historical financial data** from multiple sources (crude oil, dollar index, gold prices, NIFTY-50, US interest rates)
+- **Technical indicators** (Moving Averages, RSI, MACD, Bollinger Bands)
+- **XGBoost classifier** for directional prediction
+
+The application includes a Streamlit web interface for live market predictions and manual scenario testing.
+
+## 📊 Features
+
+- **Multi-Asset Analysis**: Incorporates 6+ macroeconomic indicators
+- **Technical Indicators**: MA, RSI, MACD, and Bollinger Bands
+- **Stationary Data Processing**: Converts prices to percentage changes to prevent overfitting
+- **Live Market Integration**: Fetches real-time data using yfinance
+- **Interactive Web UI**: Streamlit-based interface for predictions
+- **Model Tuning**: GridSearchCV hyperparameter optimization
+
+## 🏗️ Project Structure
+
+```
+├── app.py                      # Streamlit web application
+├── dataset.py                  # Data pipeline (fetch, clean, engineer features)
+├── xgboost_cprd.py            # Model training and evaluation
+├── inr_macro_dataset.csv      # Training dataset
+├── requirements.txt            # Python dependencies
+└── README.md                   # This file
+```
+
+## 🛠️ Installation
+
+### Prerequisites
+- Python 3.8+
+- pip package manager
+
+### Setup
+
+1. **Clone or download the project** to your local machine
+
+2. **Create a virtual environment** (recommended):
+   ```bash
+   python -m venv venv
+   # On Windows:
+   venv\Scripts\activate
+   # On macOS/Linux:
+   source venv/bin/activate
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+## 📦 Dependencies
+
+- **yfinance** - Fetch financial market data
+- **pandas** - Data manipulation and analysis
+- **numpy** - Numerical computing
+- **scikit-learn** - Machine learning utilities and metrics
+- **xgboost** - Gradient boosting classifier
+- **streamlit** - Web application framework
+- **joblib** - Model serialization
+
+## 🚀 Usage
+
+### 1. Build the Dataset
+
+Generate the training dataset by fetching 12 years of historical data:
+
+```bash
+python dataset.py
+```
+
+This will:
+- Download historical price data for INR, crude oil, dollar index, gold, NIFTY-50, and US interest rates
+- Calculate technical indicators
+- Create the `inr_macro_dataset.csv` file
+
+### 2. Train the XGBoost Model
+
+Train and evaluate the XGBoost classifier:
+
+```bash
+python xgboost_cprd.py
+```
+
+This will:
+- Load and preprocess the dataset
+- Perform hyperparameter tuning with GridSearchCV
+- Train the final model
+- Save the model as `inr_predictor_model.pkl`
+- Display accuracy and classification metrics
+
+### 3. Run the Web Application
+
+Start the Streamlit app for interactive predictions:
+
+```bash
+streamlit run app.py
+```
+
+Then open your browser to `http://localhost:8501`
+
+**Features**:
+- View model accuracy metrics
+- **Live Market Data Mode**: Predict next day's INR trend using current market data
+- **Manual Input Mode**: Test predictions with custom values
+
+## 📈 Model Performance
+
+- **Training Accuracy**: ~68% (as configured in app.py)
+- **Model Type**: XGBoost Classifier with optimized hyperparameters
+- **Validation Strategy**: Time-series split (no shuffle to maintain temporal integrity)
+
+## 🔧 Technical Details
+
+### Data Processing
+- **Stationarity**: Converts raw prices to daily percentage changes (prevents overfitting to price levels)
+- **Feature Engineering**: Calculates technical indicators with rolling windows
+- **Missing Data**: Forward fill and backward fill strategies
+
+### Key Technical Indicators
+- **MA_5, MA_20**: 5-day and 20-day moving averages
+- **RSI**: Relative Strength Index (14-period)
+- **MACD**: Moving Average Convergence Divergence
+- **Bollinger Bands**: Mid-band and standard deviation
+
+### Target Variable
+- **Target_Appreciation**: Binary classification (currency appreciation/depreciation)
+
+## 📝 Workflow
+
+1. **Data Collection** → Fetch 12 years of market data via yfinance
+2. **Feature Engineering** → Calculate technical indicators
+3. **Data Preprocessing** → Convert to stationarity, handle missing values
+4. **Model Training** → XGBoost with hyperparameter tuning
+5. **Evaluation** → Accuracy, precision, recall metrics
+6. **Deployment** → Streamlit web interface for predictions
+
+## 💡 Future Enhancements
+
+- Add ARIMA/LSTM models for time-series comparison
+- Implement ensemble methods combining multiple models
+- Add sentiment analysis from financial news
+- Backtesting framework for historical performance
+- Model explainability (SHAP values)
+
+## ⚠️ Disclaimer
+
+This project is for educational and research purposes only. Currency market predictions are inherently uncertain. Do not use this model for real investment decisions without thorough validation and professional financial advice.
+
+## 📧 Notes
+
+- Requires internet connection to fetch real-time data
+- Model training may take a few minutes due to GridSearchCV optimization
+- All timestamps are in UTC timezone
+
+---
+
+**Last Updated**: March 2026
+
+
+================================================================================
+FILE: app.py
+================================================================================
+import streamlit as st
+import pandas as pd
+import joblib
+import yfinance as yf
+import datetime
+from sklearn.metrics import accuracy_score
+
+
+def get_major_reason(input_features):
+    # Get feature importances from the model
+    importances = pd.Series(model.feature_importances_, index=model.feature_names_in_)
+    # Calculate contribution: (Input Value) * (Feature Importance)
+    # This shows which feature had the highest impact based on its value today
+    contribution = input_features.iloc[0].abs() * importances
+    top_reason = contribution.idxmax()
+    return top_reason, importances[top_reason]
+
+# --- CONFIGURATION ---
+tickers = {'USD_INR': 'INR=X', 'Crude_Oil': 'CL=F', 'Dollar_Index': 'UUP', 
+           'Gold': 'GC=F', 'NIFTY_50': '^NSEI', 'US_Interest_Rate': '^IRX'}
+
+# --- HELPER FUNCTIONS ---
+@st.cache_resource
+def load_model():
+    return joblib.load('inr_predictor_model.pkl')
+
+def calculate_indicators(df):
+    """Adds technical indicators to a dataframe with USD_INR column."""
+    df['MA_5'] = df['USD_INR'].rolling(window=5).mean()
+    df['MA_20'] = df['USD_INR'].rolling(window=20).mean()
+    delta = df['USD_INR'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    df['RSI'] = 100 - (100 / (1 + (gain / loss)))
+    exp1 = df['USD_INR'].ewm(span=12, adjust=False).mean()
+    exp2 = df['USD_INR'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = exp1 - exp2
+    df['BB_mid'] = df['USD_INR'].rolling(window=20).mean()
+    df['BB_std'] = df['USD_INR'].rolling(window=20).std()
+    return df
+
+model = load_model()
+
+# --- UI START ---
+st.title("INR Currency Trend Predictor")
+st.write("Professional ML Pipeline for Directional Prediction")
+
+# Metrics
+acc = 0.6206
+st.metric("Model Accuracy (Training)", f"{acc:.1%}")
+
+st.divider()
+
+# --- PREDICTION MODE ---
+mode = st.radio("Select Prediction Mode", ["Live Market Data", "Manual Input"])
+end = datetime.datetime.now()
+start = end - datetime.timedelta(days=90)
+
+if mode == "Live Market Data":
+    if st.button("Predict Tomorrow's Trend"):
+        with st.spinner('Calculating...'):
+            df = yf.download(list(tickers.values()), start=start, end=end, auto_adjust=False)['Close']
+            df.rename(columns={v:k for k,v in tickers.items()}, inplace=True)
+            df.ffill(inplace=True)
+            df = calculate_indicators(df)
+            
+            features = df.pct_change() * 100
+            latest = features.tail(1)[model.feature_names_in_]
+            
+            # --- PREDICT ---
+            prediction = model.predict(latest)
+            
+            # --- GET REASON (Inside the button block!) ---
+            importances = pd.Series(model.feature_importances_, index=model.feature_names_in_)
+            contribution = latest.iloc[0].abs() * importances
+            reason = contribution.idxmax()
+            weight = importances[reason]
+            
+            # --- DISPLAY ---
+            if prediction[0] == 1: 
+                st.success(f"Prediction: INR will APPRECIATE.")
+            else: 
+                st.error(f"Prediction: INR will DEPRECIATE.")
+            
+            st.info(f"**Major Driving Factor:** {reason} (Importance: {weight:.2%})")
+            
+            st.write("Data used for prediction:")
+            st.dataframe(latest)
+           
+            
+
+elif mode == "Manual Input":
+    with st.form("manual"):
+        # Create inputs for all features used by the model
+        input_dict = {col: st.number_input(f"{col} (%)", value=0.0) for col in model.feature_names_in_}
+        if st.form_submit_button("Predict"):
+            input_df = pd.DataFrame([input_dict])
+            prediction = model.predict(input_df)
+            # ... (after prediction = model.predict(latest_features)) ...
+            
+            # Get the reason
+            reason, weight = get_major_reason(input_df)
+            
+            if prediction[0] == 1: 
+                st.success(f"Prediction: INR will APPRECIATE.")
+            else: 
+                st.error(f"Prediction: INR will DEPRECIATE.")
+            
+            st.info(f"**Major Driving Factor:** {reason} (Global Model Weight: {weight:.2%})")
+            
+            
+# --- PERFORMANCE BACKTEST ---
+st.divider()
+if st.button("Run 30-Day Backtest"):
+    df = yf.download(list(tickers.values()), start=start, end=end, auto_adjust=False)['Close']
+    df.rename(columns={v:k for k,v in tickers.items()}, inplace=True)
+    df.ffill(inplace=True)
+    df = calculate_indicators(df)
+    df['Actual'] = (df['USD_INR'].shift(-1) < df['USD_INR']).astype(int)
+    
+    X = (df.drop(columns=['Actual'], errors='ignore').pct_change() * 100)[model.feature_names_in_].dropna()
+    y = df['Actual'].loc[X.index]
+    
+    y_pred = model.predict(X.tail(30))
+    y_true = y.tail(30)
+    
+    st.metric("30-Day Backtest Accuracy", f"{accuracy_score(y_true, y_pred):.1%}")
+    st.line_chart(pd.DataFrame({'Actual': y_true.values, 'Predicted': y_pred}, index=y_true.index))
+
+
+================================================================================
+FILE: dataset.py
+================================================================================
+import yfinance as yf
+import pandas as pd
+import datetime
+
+def build_dataset():
+    print("--- Starting Pipeline: Fetching Data ---")
+    end = datetime.datetime.now()
+    start = end - datetime.timedelta(days=12 * 365) # 12 years of data for training
+    
+    # Stable tickers
+    tickers = {
+        'USD_INR': 'INR=X', 
+        'Crude_Oil': 'CL=F', 
+        'Dollar_Index': 'UUP', 
+        'Gold': 'GC=F', 
+        'NIFTY_50': '^NSEI',
+        'US_Interest_Rate': '^IRX'
+    }
+    
+    # 1. Fetch Data
+    raw_data = yf.download(list(tickers.values()), start=start, end=end, auto_adjust=False)['Close']
+    raw_data.rename(columns={v: k for k, v in tickers.items()}, inplace=True)
+    
+    # 2. Force index to datetime
+    raw_data.index = pd.to_datetime(raw_data.index)
+    
+    # 3. Clean Missing Data
+    print("Cleaning data...")
+    raw_data.ffill(inplace=True)
+    raw_data.bfill(inplace=True)
+    
+    # 4. Feature Engineering: Technical Indicators
+    print("Calculating Technical Indicators (MA, RSI, MACD, Bollinger)...")
+    df = raw_data.copy()
+    
+    # Moving Averages
+    df['MA_5'] = df['USD_INR'].rolling(window=5).mean()
+    df['MA_20'] = df['USD_INR'].rolling(window=20).mean()
+    
+    # RSI
+    delta = df['USD_INR'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # MACD
+    exp1 = df['USD_INR'].ewm(span=12, adjust=False).mean()
+    exp2 = df['USD_INR'].ewm(span=26, adjust=False).mean()
+    df['MACD'] = exp1 - exp2
+    
+    # Bollinger Bands
+    df['BB_mid'] = df['USD_INR'].rolling(window=20).mean()
+    df['BB_std'] = df['USD_INR'].rolling(window=20).std()
+    
+    # 5. Define Target: 1 if USD/INR price goes DOWN tomorrow (INR Appreciates)
+    df['Target_Appreciation'] = (df['USD_INR'].shift(-1) < df['USD_INR']).astype(int)
+    
+    # Final cleanup
+    df.dropna(inplace=True)
+    
+    # 6. Save
+    df.to_csv('inr_macro_dataset.csv')
+    print(f"--- SUCCESS: Dataset created with {len(df)} rows and {len(df.columns)} columns ---")
+    print(f"Columns: {list(df.columns)}")
+
+if __name__ == "__main__":
+    build_dataset()
+
+
+================================================================================
+FILE: generate_codebase_report.py
+================================================================================
+#!/usr/bin/env python3
+"""
+Generate a comprehensive text file containing all project source code and documents.
+"""
+
+import os
+import sys
+from pathlib import Path
+from datetime import datetime
+
+
+def should_include_file(file_path, root_dir):
+    """Determine if a file should be included in the report."""
+    # Files to exclude
+    exclude_patterns = {
+        '.pyc', '.pyo', '.pyd', '.so', '.dll', '.exe',
+        '.git', '.gitignore', '__pycache__', '.venv', 'venv',
+        '.env', '.DS_Store', '.idea', '.vscode',
+        '.csv', '.xlsx', '.xls', '.db', '.sqlite',
+        'node_modules', '.egg-info'
+    }
+    
+    # File extensions to include
+    include_extensions = {
+        '.py', '.txt', '.md', '.yml', '.yaml', '.json',
+        '.sql', '.sh', '.bat', '.ps1', '.r', '.R',
+        '.java', '.cpp', '.c', '.h', '.js', '.ts',
+        '.html', '.css', '.xml', '.html'
+    }
+    
+    name = os.path.basename(file_path)
+    
+    # Skip hidden files and directories
+    if name.startswith('.'):
+        return False
+    
+    # Skip excluded patterns
+    for pattern in exclude_patterns:
+        if pattern in name or pattern in str(file_path):
+            return False
+    
+    # Skip large files
+    try:
+        if os.path.getsize(file_path) > 10_000_000:  # 10MB
+            return False
+    except OSError:
+        return False
+    
+    # Check extension
+    ext = os.path.splitext(name)[1].lower()
+    if ext in include_extensions:
+        return True
+    
+    # Include specific files without extensions
+    if name in {'README', 'Makefile', 'Dockerfile', 'requirements', 'setup', 'LICENSE'}:
+        return True
+    
+    return False
+
+
+def generate_codebase_report(root_dir, output_file='codebase_report.txt'):
+    """Generate a text report of all project source code."""
+    output_path = os.path.join(root_dir, output_file)
+    
+    # Collect all files
+    files_to_process = []
+    for root, dirs, files in os.walk(root_dir):
+        # Skip certain directories
+        dirs[:] = [d for d in dirs if d not in {'.git', '__pycache__', 'venv', '.venv', 'node_modules'}]
+        
+        for file in files:
+            file_path = os.path.join(root, file)
+            if should_include_file(file_path, root_dir):
+                rel_path = os.path.relpath(file_path, root_dir)
+                files_to_process.append((file_path, rel_path))
+    
+    # Sort files for better organization
+    files_to_process.sort(key=lambda x: x[1])
+    
+    # Generate report
+    with open(output_path, 'w', encoding='utf-8', errors='ignore') as report:
+        # Write header
+        report.write("=" * 80 + "\n")
+        report.write("PROJECT CODEBASE REPORT\n")
+        report.write("=" * 80 + "\n")
+        report.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        report.write(f"Root Directory: {root_dir}\n")
+        report.write(f"Total Files: {len(files_to_process)}\n")
+        report.write("=" * 80 + "\n\n")
+        
+        # Table of Contents
+        report.write("TABLE OF CONTENTS\n")
+        report.write("-" * 80 + "\n")
+        for i, (_, rel_path) in enumerate(files_to_process, 1):
+            report.write(f"{i:3d}. {rel_path}\n")
+        report.write("\n" + "=" * 80 + "\n\n")
+        
+        # File contents
+        for file_path, rel_path in files_to_process:
+            report.write("\n" + "=" * 80 + "\n")
+            report.write(f"FILE: {rel_path}\n")
+            report.write("=" * 80 + "\n")
+            
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    report.write(content)
+                    if not content.endswith('\n'):
+                        report.write("\n")
+            except Exception as e:
+                report.write(f"[ERROR reading file: {str(e)}]\n")
+            
+            report.write("\n")
+    
+    print(f"✓ Codebase report generated: {output_path}")
+    print(f"✓ Total files included: {len(files_to_process)}")
+    return output_path
+
+
+if __name__ == "__main__":
+    # Get the directory of this script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Generate report
+    output_file = "codebase_report.txt"
+    if len(sys.argv) > 1:
+        output_file = sys.argv[1]
+    
+    generate_codebase_report(script_dir, output_file)
+
+
+================================================================================
+FILE: generate_workspace_summary.py
+================================================================================
+import os
+from pathlib import Path
+from datetime import datetime
+
+def generate_workspace_summary(workspace_path, output_file):
+    """
+    Generate a comprehensive summary of the workspace and save to a text file.
+    
+    Args:
+        workspace_path: Path to the workspace directory
+        output_file: Output file path for the summary
+    """
+    workspace_path = Path(workspace_path)
+    
+    with open(output_file, 'w', encoding='utf-8') as f:
+        # Header
+        f.write("=" * 80 + "\n")
+        f.write("WORKSPACE SUMMARY\n")
+        f.write("=" * 80 + "\n\n")
+        
+        # Basic Info
+        f.write(f"Workspace Path: {workspace_path.absolute()}\n")
+        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        # Directory Structure
+        f.write("-" * 80 + "\n")
+        f.write("DIRECTORY STRUCTURE\n")
+        f.write("-" * 80 + "\n\n")
+        
+        def walk_directory(path, prefix="", is_last=True):
+            """Recursively walk directory and write to file."""
+            try:
+                items = sorted(path.iterdir(), key=lambda x: (x.is_file(), x.name))
+                dirs = [item for item in items if item.is_dir()]
+                files = [item for item in items if item.is_file()]
+                
+                # Process directories first
+                for i, item in enumerate(dirs):
+                    is_last_item = (i == len(dirs) - 1) and len(files) == 0
+                    current_prefix = "└── " if is_last_item else "├── "
+                    f.write(prefix + current_prefix + item.name + "/\n")
+                    
+                    next_prefix = prefix + ("    " if is_last_item else "│   ")
+                    walk_directory(item, next_prefix, is_last_item)
+                
+                # Process files
+                for i, item in enumerate(files):
+                    is_last_item = (i == len(files) - 1)
+                    current_prefix = "└── " if is_last_item else "├── "
+                    size_kb = item.stat().st_size / 1024
+                    f.write(f"{prefix}{current_prefix}{item.name} ({size_kb:.2f} KB)\n")
+                    
+            except PermissionError:
+                f.write(prefix + "[Permission Denied]\n")
+        
+        f.write(f"{workspace_path.name}/\n")
+        walk_directory(workspace_path)
+        
+        # File Statistics
+        f.write("\n" + "-" * 80 + "\n")
+        f.write("FILE STATISTICS\n")
+        f.write("-" * 80 + "\n\n")
+        
+        total_files = 0
+        total_dirs = 0
+        total_size = 0
+        file_types = {}
+        
+        for root, dirs, files in os.walk(workspace_path):
+            total_dirs += len(dirs)
+            total_files += len(files)
+            
+            for file in files:
+                file_path = Path(root) / file
+                file_ext = file_path.suffix or "[No Extension]"
+                file_size = file_path.stat().st_size
+                total_size += file_size
+                
+                if file_ext not in file_types:
+                    file_types[file_ext] = {"count": 0, "size": 0}
+                
+                file_types[file_ext]["count"] += 1
+                file_types[file_ext]["size"] += file_size
+        
+        f.write(f"Total Directories: {total_dirs}\n")
+        f.write(f"Total Files: {total_files}\n")
+        f.write(f"Total Size: {total_size / (1024*1024):.2f} MB\n\n")
+        
+        f.write("File Types Breakdown:\n")
+        f.write("-" * 40 + "\n")
+        for ext in sorted(file_types.keys()):
+            count = file_types[ext]["count"]
+            size = file_types[ext]["size"] / 1024
+            f.write(f"{ext:20} {count:5} files  {size:10.2f} KB\n")
+        
+        # Detailed File Listing
+        f.write("\n" + "-" * 80 + "\n")
+        f.write("DETAILED FILE LISTING\n")
+        f.write("-" * 80 + "\n\n")
+        
+        for root, dirs, files in os.walk(workspace_path):
+            if files:
+                rel_root = Path(root).relative_to(workspace_path)
+                if rel_root != Path("."):
+                    f.write(f"\n{rel_root}/\n")
+                else:
+                    f.write("\n[Root]\n")
+                
+                for file in sorted(files):
+                    file_path = Path(root) / file
+                    size_kb = file_path.stat().st_size / 1024
+                    f.write(f"  {file:<40} {size_kb:>10.2f} KB\n")
+        
+        # Footer
+        f.write("\n" + "=" * 80 + "\n")
+        f.write("End of Workspace Summary\n")
+        f.write("=" * 80 + "\n")
+    
+    print(f"Workspace summary generated: {output_file}")
+
+if __name__ == "__main__":
+    # Set workspace path to current directory
+    workspace_path = os.getcwd()
+    output_file = os.path.join(workspace_path, "workspace_summary.txt")
+    
+    generate_workspace_summary(workspace_path, output_file)
+
+
+================================================================================
+FILE: requirements.txt
+================================================================================
+yfinance
+pandas
+numpy
+scikit-learn
+xgboost
+streamlit
+joblib
+
+
+================================================================================
+FILE: workspace_summary.txt
+================================================================================
+================================================================================
+WORKSPACE SUMMARY
+================================================================================
+
+Workspace Path: D:\ML_vit\Xg_bst
+Generated: 2026-04-10 00:45:57
+
+--------------------------------------------------------------------------------
+DIRECTORY STRUCTURE
+--------------------------------------------------------------------------------
+
+Xg_bst/
+├── .opencode/
+│   └── server.lock.json (0.16 KB)
+├── venv/
+│   ├── Include/
+│   ├── Lib/
+│   │   └── site-packages/
+│   │       ├── pip/
+│   │       │   ├── __pycache__/
+│   │       │   │   ├── __init__.cpython-312.pyc (0.65 KB)
+│   │       │   │   ├── __main__.cpython-312.pyc (0.80 KB)
+│   │       │   │   └── __pip-runner__.cpython-312.pyc (2.13 KB)
+│   │       │   ├── _internal/
+│   │       │   │   ├── __pycache__/
+│   │       │   │   │   ├── __init__.cpython-312.pyc (0.75 KB)
+│   │       │   │   │   ├── build_env.cpython-312.pyc (14.40 KB)
+│   │       │   │   │   ├── cache.cpython-312.pyc (12.35 KB)
+│   │       │   │   │   ├── configuration.cpython-312.pyc (17.19 KB)
+│   │       │   │   │   ├── exceptions.cpython-312.pyc (35.96 KB)
+│   │       │   │   │   ├── main.cpython-312.pyc (0.63 KB)
+│   │       │   │   │   ├── pyproject.cpython-312.pyc (4.97 KB)
+│   │       │   │   │   ├── self_outdated_check.cpython-312.pyc (10.14 KB)
+│   │       │   │   │   └── wheel_builder.cpython-312.pyc (13.27 KB)
+│   │       │   │   ├── cli/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.25 KB)
+│   │       │   │   │   │   ├── autocompletion.cpython-312.pyc (8.38 KB)
+│   │       │   │   │   │   ├── base_command.cpython-312.pyc (10.24 KB)
+│   │       │   │   │   │   ├── cmdoptions.cpython-312.pyc (29.67 KB)
+│   │       │   │   │   │   ├── command_context.cpython-312.pyc (1.71 KB)
+│   │       │   │   │   │   ├── index_command.cpython-312.pyc (6.99 KB)
+│   │       │   │   │   │   ├── main.cpython-312.pyc (2.22 KB)
+│   │       │   │   │   │   ├── main_parser.cpython-312.pyc (4.77 KB)
+│   │       │   │   │   │   ├── parser.cpython-312.pyc (14.66 KB)
+│   │       │   │   │   │   ├── progress_bars.cpython-312.pyc (3.74 KB)
+│   │       │   │   │   │   ├── req_command.cpython-312.pyc (11.93 KB)
+│   │       │   │   │   │   ├── spinners.cpython-312.pyc (7.63 KB)
+│   │       │   │   │   │   └── status_codes.cpython-312.pyc (0.34 KB)
+│   │       │   │   │   ├── __init__.py (0.13 KB)
+│   │       │   │   │   ├── autocompletion.py (6.70 KB)
+│   │       │   │   │   ├── base_command.py (8.42 KB)
+│   │       │   │   │   ├── cmdoptions.py (29.41 KB)
+│   │       │   │   │   ├── command_context.py (0.76 KB)
+│   │       │   │   │   ├── index_command.py (5.54 KB)
+│   │       │   │   │   ├── main.py (2.75 KB)
+│   │       │   │   │   ├── main_parser.py (4.24 KB)
+│   │       │   │   │   ├── parser.py (10.57 KB)
+│   │       │   │   │   ├── progress_bars.py (2.65 KB)
+│   │       │   │   │   ├── req_command.py (11.96 KB)
+│   │       │   │   │   ├── spinners.py (5.00 KB)
+│   │       │   │   │   └── status_codes.py (0.11 KB)
+│   │       │   │   ├── commands/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (3.88 KB)
+│   │       │   │   │   │   ├── cache.cpython-312.pyc (9.67 KB)
+│   │       │   │   │   │   ├── check.cpython-312.pyc (2.51 KB)
+│   │       │   │   │   │   ├── completion.cpython-312.pyc (5.05 KB)
+│   │       │   │   │   │   ├── configuration.cpython-312.pyc (12.83 KB)
+│   │       │   │   │   │   ├── debug.cpython-312.pyc (9.81 KB)
+│   │       │   │   │   │   ├── download.cpython-312.pyc (7.30 KB)
+│   │       │   │   │   │   ├── freeze.cpython-312.pyc (4.26 KB)
+│   │       │   │   │   │   ├── hash.cpython-312.pyc (2.88 KB)
+│   │       │   │   │   │   ├── help.cpython-312.pyc (1.61 KB)
+│   │       │   │   │   │   ├── index.cpython-312.pyc (6.49 KB)
+│   │       │   │   │   │   ├── inspect.cpython-312.pyc (3.86 KB)
+│   │       │   │   │   │   ├── install.cpython-312.pyc (28.39 KB)
+│   │       │   │   │   │   ├── list.cpython-312.pyc (15.36 KB)
+│   │       │   │   │   │   ├── search.cpython-312.pyc (7.32 KB)
+│   │       │   │   │   │   ├── show.cpython-312.pyc (10.66 KB)
+│   │       │   │   │   │   ├── uninstall.cpython-312.pyc (4.58 KB)
+│   │       │   │   │   │   └── wheel.cpython-312.pyc (8.63 KB)
+│   │       │   │   │   ├── __init__.py (3.79 KB)
+│   │       │   │   │   ├── cache.py (7.92 KB)
+│   │       │   │   │   ├── check.py (2.21 KB)
+│   │       │   │   │   ├── completion.py (4.19 KB)
+│   │       │   │   │   ├── configuration.py (9.54 KB)
+│   │       │   │   │   ├── debug.py (6.64 KB)
+│   │       │   │   │   ├── download.py (5.15 KB)
+│   │       │   │   │   ├── freeze.py (3.13 KB)
+│   │       │   │   │   ├── hash.py (1.66 KB)
+│   │       │   │   │   ├── help.py (1.11 KB)
+│   │       │   │   │   ├── index.py (4.62 KB)
+│   │       │   │   │   ├── inspect.py (3.11 KB)
+│   │       │   │   │   ├── install.py (28.70 KB)
+│   │       │   │   │   ├── list.py (12.47 KB)
+│   │       │   │   │   ├── search.py (5.49 KB)
+│   │       │   │   │   ├── show.py (7.67 KB)
+│   │       │   │   │   ├── uninstall.py (3.80 KB)
+│   │       │   │   │   └── wheel.py (6.26 KB)
+│   │       │   │   ├── distributions/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.90 KB)
+│   │       │   │   │   │   ├── base.cpython-312.pyc (2.80 KB)
+│   │       │   │   │   │   ├── installed.cpython-312.pyc (1.64 KB)
+│   │       │   │   │   │   ├── sdist.cpython-312.pyc (8.21 KB)
+│   │       │   │   │   │   └── wheel.cpython-312.pyc (2.20 KB)
+│   │       │   │   │   ├── __init__.py (0.84 KB)
+│   │       │   │   │   ├── base.py (1.74 KB)
+│   │       │   │   │   ├── installed.py (0.82 KB)
+│   │       │   │   │   ├── sdist.py (6.59 KB)
+│   │       │   │   │   └── wheel.py (1.29 KB)
+│   │       │   │   ├── index/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.20 KB)
+│   │       │   │   │   │   ├── collector.cpython-312.pyc (21.09 KB)
+│   │       │   │   │   │   ├── package_finder.cpython-312.pyc (40.37 KB)
+│   │       │   │   │   │   └── sources.cpython-312.pyc (12.21 KB)
+│   │       │   │   │   ├── __init__.py (0.03 KB)
+│   │       │   │   │   ├── collector.py (15.88 KB)
+│   │       │   │   │   ├── package_finder.py (37.18 KB)
+│   │       │   │   │   └── sources.py (8.43 KB)
+│   │       │   │   ├── locations/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (16.03 KB)
+│   │       │   │   │   │   ├── _distutils.cpython-312.pyc (6.61 KB)
+│   │       │   │   │   │   ├── _sysconfig.cpython-312.pyc (7.82 KB)
+│   │       │   │   │   │   └── base.cpython-312.pyc (3.67 KB)
+│   │       │   │   │   ├── __init__.py (14.58 KB)
+│   │       │   │   │   ├── _distutils.py (5.87 KB)
+│   │       │   │   │   ├── _sysconfig.py (7.54 KB)
+│   │       │   │   │   └── base.py (2.50 KB)
+│   │       │   │   ├── metadata/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (5.71 KB)
+│   │       │   │   │   │   ├── _json.cpython-312.pyc (2.87 KB)
+│   │       │   │   │   │   ├── base.cpython-312.pyc (34.35 KB)
+│   │       │   │   │   │   └── pkg_resources.cpython-312.pyc (15.68 KB)
+│   │       │   │   │   ├── importlib/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (0.33 KB)
+│   │       │   │   │   │   │   ├── _compat.cpython-312.pyc (4.36 KB)
+│   │       │   │   │   │   │   ├── _dists.cpython-312.pyc (12.55 KB)
+│   │       │   │   │   │   │   └── _envs.cpython-312.pyc (10.80 KB)
+│   │       │   │   │   │   ├── __init__.py (0.13 KB)
+│   │       │   │   │   │   ├── _compat.py (2.73 KB)
+│   │       │   │   │   │   ├── _dists.py (8.08 KB)
+│   │       │   │   │   │   └── _envs.py (7.26 KB)
+│   │       │   │   │   ├── __init__.py (4.24 KB)
+│   │       │   │   │   ├── _json.py (2.64 KB)
+│   │       │   │   │   ├── base.py (24.71 KB)
+│   │       │   │   │   └── pkg_resources.py (10.29 KB)
+│   │       │   │   ├── models/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.24 KB)
+│   │       │   │   │   │   ├── candidate.cpython-312.pyc (1.54 KB)
+│   │       │   │   │   │   ├── direct_url.cpython-312.pyc (10.57 KB)
+│   │       │   │   │   │   ├── format_control.cpython-312.pyc (4.10 KB)
+│   │       │   │   │   │   ├── index.cpython-312.pyc (1.63 KB)
+│   │       │   │   │   │   ├── installation_report.cpython-312.pyc (2.20 KB)
+│   │       │   │   │   │   ├── link.cpython-312.pyc (26.33 KB)
+│   │       │   │   │   │   ├── scheme.cpython-312.pyc (0.98 KB)
+│   │       │   │   │   │   ├── search_scope.cpython-312.pyc (4.85 KB)
+│   │       │   │   │   │   ├── selection_prefs.cpython-312.pyc (1.78 KB)
+│   │       │   │   │   │   ├── target_python.cpython-312.pyc (4.81 KB)
+│   │       │   │   │   │   └── wheel.cpython-312.pyc (6.38 KB)
+│   │       │   │   │   ├── __init__.py (0.06 KB)
+│   │       │   │   │   ├── candidate.py (0.74 KB)
+│   │       │   │   │   ├── direct_url.py (6.42 KB)
+│   │       │   │   │   ├── format_control.py (2.43 KB)
+│   │       │   │   │   ├── index.py (1.01 KB)
+│   │       │   │   │   ├── installation_report.py (2.75 KB)
+│   │       │   │   │   ├── link.py (20.95 KB)
+│   │       │   │   │   ├── scheme.py (0.56 KB)
+│   │       │   │   │   ├── search_scope.py (4.42 KB)
+│   │       │   │   │   ├── selection_prefs.py (1.97 KB)
+│   │       │   │   │   ├── target_python.py (4.17 KB)
+│   │       │   │   │   └── wheel.py (4.43 KB)
+│   │       │   │   ├── network/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.22 KB)
+│   │       │   │   │   │   ├── auth.cpython-312.pyc (21.56 KB)
+│   │       │   │   │   │   ├── cache.cpython-312.pyc (6.86 KB)
+│   │       │   │   │   │   ├── download.cpython-312.pyc (8.26 KB)
+│   │       │   │   │   │   ├── lazy_wheel.cpython-312.pyc (11.31 KB)
+│   │       │   │   │   │   ├── session.cpython-312.pyc (18.44 KB)
+│   │       │   │   │   │   ├── utils.cpython-312.pyc (2.18 KB)
+│   │       │   │   │   │   └── xmlrpc.cpython-312.pyc (2.86 KB)
+│   │       │   │   │   ├── __init__.py (0.05 KB)
+│   │       │   │   │   ├── auth.py (20.32 KB)
+│   │       │   │   │   ├── cache.py (4.51 KB)
+│   │       │   │   │   ├── download.py (5.91 KB)
+│   │       │   │   │   ├── lazy_wheel.py (7.44 KB)
+│   │       │   │   │   ├── session.py (18.33 KB)
+│   │       │   │   │   ├── utils.py (3.99 KB)
+│   │       │   │   │   └── xmlrpc.py (1.79 KB)
+│   │       │   │   ├── operations/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.17 KB)
+│   │       │   │   │   │   ├── check.cpython-312.pyc (6.91 KB)
+│   │       │   │   │   │   ├── freeze.cpython-312.pyc (9.98 KB)
+│   │       │   │   │   │   └── prepare.cpython-312.pyc (25.14 KB)
+│   │       │   │   │   ├── build/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (0.17 KB)
+│   │       │   │   │   │   │   ├── build_tracker.cpython-312.pyc (7.46 KB)
+│   │       │   │   │   │   │   ├── metadata.cpython-312.pyc (1.79 KB)
+│   │       │   │   │   │   │   ├── metadata_editable.cpython-312.pyc (1.84 KB)
+│   │       │   │   │   │   │   ├── metadata_legacy.cpython-312.pyc (2.92 KB)
+│   │       │   │   │   │   │   ├── wheel.cpython-312.pyc (1.61 KB)
+│   │       │   │   │   │   │   ├── wheel_editable.cpython-312.pyc (1.95 KB)
+│   │       │   │   │   │   │   └── wheel_legacy.cpython-312.pyc (3.73 KB)
+│   │       │   │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   │   ├── build_tracker.py (4.66 KB)
+│   │       │   │   │   │   ├── metadata.py (1.39 KB)
+│   │       │   │   │   │   ├── metadata_editable.py (1.47 KB)
+│   │       │   │   │   │   ├── metadata_legacy.py (2.14 KB)
+│   │       │   │   │   │   ├── wheel.py (1.05 KB)
+│   │       │   │   │   │   ├── wheel_editable.py (1.38 KB)
+│   │       │   │   │   │   └── wheel_legacy.py (2.97 KB)
+│   │       │   │   │   ├── install/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (0.24 KB)
+│   │       │   │   │   │   │   ├── editable_legacy.cpython-312.pyc (1.73 KB)
+│   │       │   │   │   │   │   └── wheel.cpython-312.pyc (33.28 KB)
+│   │       │   │   │   │   ├── __init__.py (0.05 KB)
+│   │       │   │   │   │   ├── editable_legacy.py (1.25 KB)
+│   │       │   │   │   │   └── wheel.py (26.97 KB)
+│   │       │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   ├── check.py (5.77 KB)
+│   │       │   │   │   ├── freeze.py (9.61 KB)
+│   │       │   │   │   └── prepare.py (27.46 KB)
+│   │       │   │   ├── req/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (3.34 KB)
+│   │       │   │   │   │   ├── constructors.cpython-312.pyc (20.73 KB)
+│   │       │   │   │   │   ├── req_file.cpython-312.pyc (23.65 KB)
+│   │       │   │   │   │   ├── req_install.cpython-312.pyc (37.54 KB)
+│   │       │   │   │   │   ├── req_set.cpython-312.pyc (5.33 KB)
+│   │       │   │   │   │   └── req_uninstall.cpython-312.pyc (31.32 KB)
+│   │       │   │   │   ├── __init__.py (2.59 KB)
+│   │       │   │   │   ├── constructors.py (18.00 KB)
+│   │       │   │   │   ├── req_file.py (19.76 KB)
+│   │       │   │   │   ├── req_install.py (34.95 KB)
+│   │       │   │   │   ├── req_set.py (2.79 KB)
+│   │       │   │   │   └── req_uninstall.py (23.29 KB)
+│   │       │   │   ├── resolution/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.17 KB)
+│   │       │   │   │   │   └── base.cpython-312.pyc (1.13 KB)
+│   │       │   │   │   ├── legacy/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (0.18 KB)
+│   │       │   │   │   │   │   └── resolver.cpython-312.pyc (22.03 KB)
+│   │       │   │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   │   └── resolver.py (23.50 KB)
+│   │       │   │   │   ├── resolvelib/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (0.18 KB)
+│   │       │   │   │   │   │   ├── base.cpython-312.pyc (7.93 KB)
+│   │       │   │   │   │   │   ├── candidates.cpython-312.pyc (28.70 KB)
+│   │       │   │   │   │   │   ├── factory.cpython-312.pyc (31.70 KB)
+│   │       │   │   │   │   │   ├── found_candidates.cpython-312.pyc (6.61 KB)
+│   │       │   │   │   │   │   ├── provider.cpython-312.pyc (10.25 KB)
+│   │       │   │   │   │   │   ├── reporter.cpython-312.pyc (4.90 KB)
+│   │       │   │   │   │   │   ├── requirements.cpython-312.pyc (14.97 KB)
+│   │       │   │   │   │   │   └── resolver.cpython-312.pyc (12.00 KB)
+│   │       │   │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   │   ├── base.py (4.91 KB)
+│   │       │   │   │   │   ├── candidates.py (19.53 KB)
+│   │       │   │   │   │   ├── factory.py (31.89 KB)
+│   │       │   │   │   │   ├── found_candidates.py (6.23 KB)
+│   │       │   │   │   │   ├── provider.py (9.70 KB)
+│   │       │   │   │   │   ├── reporter.py (3.09 KB)
+│   │       │   │   │   │   ├── requirements.py (7.88 KB)
+│   │       │   │   │   │   └── resolver.py (12.30 KB)
+│   │       │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   └── base.py (0.57 KB)
+│   │       │   │   ├── utils/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.16 KB)
+│   │       │   │   │   │   ├── _jaraco_text.cpython-312.pyc (4.40 KB)
+│   │       │   │   │   │   ├── _log.cpython-312.pyc (1.80 KB)
+│   │       │   │   │   │   ├── appdirs.cpython-312.pyc (2.33 KB)
+│   │       │   │   │   │   ├── compat.cpython-312.pyc (2.81 KB)
+│   │       │   │   │   │   ├── compatibility_tags.cpython-312.pyc (6.17 KB)
+│   │       │   │   │   │   ├── datetime.cpython-312.pyc (0.64 KB)
+│   │       │   │   │   │   ├── deprecation.cpython-312.pyc (4.07 KB)
+│   │       │   │   │   │   ├── direct_url_helpers.cpython-312.pyc (3.43 KB)
+│   │       │   │   │   │   ├── egg_link.cpython-312.pyc (3.10 KB)
+│   │       │   │   │   │   ├── entrypoints.cpython-312.pyc (3.87 KB)
+│   │       │   │   │   │   ├── filesystem.cpython-312.pyc (7.13 KB)
+│   │       │   │   │   │   ├── filetypes.cpython-312.pyc (1.11 KB)
+│   │       │   │   │   │   ├── glibc.cpython-312.pyc (2.34 KB)
+│   │       │   │   │   │   ├── hashes.cpython-312.pyc (7.40 KB)
+│   │       │   │   │   │   ├── logging.cpython-312.pyc (13.54 KB)
+│   │       │   │   │   │   ├── misc.cpython-312.pyc (32.42 KB)
+│   │       │   │   │   │   ├── packaging.cpython-312.pyc (2.57 KB)
+│   │       │   │   │   │   ├── retry.cpython-312.pyc (2.03 KB)
+│   │       │   │   │   │   ├── setuptools_build.cpython-312.pyc (4.42 KB)
+│   │       │   │   │   │   ├── subprocess.cpython-312.pyc (8.41 KB)
+│   │       │   │   │   │   ├── temp_dir.cpython-312.pyc (11.72 KB)
+│   │       │   │   │   │   ├── unpacking.cpython-312.pyc (13.16 KB)
+│   │       │   │   │   │   ├── urls.cpython-312.pyc (2.00 KB)
+│   │       │   │   │   │   ├── virtualenv.cpython-312.pyc (4.33 KB)
+│   │       │   │   │   │   └── wheel.cpython-312.pyc (5.74 KB)
+│   │       │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   ├── _jaraco_text.py (3.27 KB)
+│   │       │   │   │   ├── _log.py (0.99 KB)
+│   │       │   │   │   ├── appdirs.py (1.63 KB)
+│   │       │   │   │   ├── compat.py (2.34 KB)
+│   │       │   │   │   ├── compatibility_tags.py (6.12 KB)
+│   │       │   │   │   ├── datetime.py (0.24 KB)
+│   │       │   │   │   ├── deprecation.py (3.62 KB)
+│   │       │   │   │   ├── direct_url_helpers.py (3.12 KB)
+│   │       │   │   │   ├── egg_link.py (2.41 KB)
+│   │       │   │   │   ├── entrypoints.py (2.99 KB)
+│   │       │   │   │   ├── filesystem.py (4.83 KB)
+│   │       │   │   │   ├── filetypes.py (0.70 KB)
+│   │       │   │   │   ├── glibc.py (3.65 KB)
+│   │       │   │   │   ├── hashes.py (4.86 KB)
+│   │       │   │   │   ├── logging.py (11.57 KB)
+│   │       │   │   │   ├── misc.py (22.90 KB)
+│   │       │   │   │   ├── packaging.py (2.09 KB)
+│   │       │   │   │   ├── retry.py (1.36 KB)
+│   │       │   │   │   ├── setuptools_build.py (4.33 KB)
+│   │       │   │   │   ├── subprocess.py (8.78 KB)
+│   │       │   │   │   ├── temp_dir.py (9.09 KB)
+│   │       │   │   │   ├── unpacking.py (11.69 KB)
+│   │       │   │   │   ├── urls.py (1.56 KB)
+│   │       │   │   │   ├── virtualenv.py (3.38 KB)
+│   │       │   │   │   └── wheel.py (4.39 KB)
+│   │       │   │   ├── vcs/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.50 KB)
+│   │       │   │   │   │   ├── bazaar.cpython-312.pyc (4.91 KB)
+│   │       │   │   │   │   ├── git.cpython-312.pyc (18.55 KB)
+│   │       │   │   │   │   ├── mercurial.cpython-312.pyc (7.40 KB)
+│   │       │   │   │   │   ├── subversion.cpython-312.pyc (12.21 KB)
+│   │       │   │   │   │   └── versioncontrol.cpython-312.pyc (28.29 KB)
+│   │       │   │   │   ├── __init__.py (0.58 KB)
+│   │       │   │   │   ├── bazaar.py (3.45 KB)
+│   │       │   │   │   ├── git.py (17.75 KB)
+│   │       │   │   │   ├── mercurial.py (5.13 KB)
+│   │       │   │   │   ├── subversion.py (11.46 KB)
+│   │       │   │   │   └── versioncontrol.py (21.91 KB)
+│   │       │   │   ├── __init__.py (0.50 KB)
+│   │       │   │   ├── build_env.py (10.45 KB)
+│   │       │   │   ├── cache.py (10.13 KB)
+│   │       │   │   ├── configuration.py (13.68 KB)
+│   │       │   │   ├── exceptions.py (25.86 KB)
+│   │       │   │   ├── main.py (0.33 KB)
+│   │       │   │   ├── pyproject.py (7.12 KB)
+│   │       │   │   ├── self_outdated_check.py (8.12 KB)
+│   │       │   │   └── wheel_builder.py (11.52 KB)
+│   │       │   ├── _vendor/
+│   │       │   │   ├── __pycache__/
+│   │       │   │   │   ├── __init__.cpython-312.pyc (4.42 KB)
+│   │       │   │   │   └── typing_extensions.cpython-312.pyc (136.16 KB)
+│   │       │   │   ├── cachecontrol/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.86 KB)
+│   │       │   │   │   │   ├── _cmd.cpython-312.pyc (2.56 KB)
+│   │       │   │   │   │   ├── adapter.cpython-312.pyc (6.29 KB)
+│   │       │   │   │   │   ├── cache.cpython-312.pyc (3.68 KB)
+│   │       │   │   │   │   ├── controller.cpython-312.pyc (15.82 KB)
+│   │       │   │   │   │   ├── filewrapper.cpython-312.pyc (4.22 KB)
+│   │       │   │   │   │   ├── heuristics.cpython-312.pyc (6.52 KB)
+│   │       │   │   │   │   ├── serialize.cpython-312.pyc (5.12 KB)
+│   │       │   │   │   │   └── wrapper.cpython-312.pyc (1.61 KB)
+│   │       │   │   │   ├── caches/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (0.40 KB)
+│   │       │   │   │   │   │   ├── file_cache.cpython-312.pyc (7.54 KB)
+│   │       │   │   │   │   │   └── redis_cache.cpython-312.pyc (2.65 KB)
+│   │       │   │   │   │   ├── __init__.py (0.30 KB)
+│   │       │   │   │   │   ├── file_cache.py (5.27 KB)
+│   │       │   │   │   │   └── redis_cache.py (1.35 KB)
+│   │       │   │   │   ├── __init__.py (0.66 KB)
+│   │       │   │   │   ├── _cmd.py (1.70 KB)
+│   │       │   │   │   ├── adapter.py (6.20 KB)
+│   │       │   │   │   ├── cache.py (1.91 KB)
+│   │       │   │   │   ├── controller.py (18.14 KB)
+│   │       │   │   │   ├── filewrapper.py (4.19 KB)
+│   │       │   │   │   ├── heuristics.py (4.77 KB)
+│   │       │   │   │   ├── py.typed (0.00 KB)
+│   │       │   │   │   ├── serialize.py (5.04 KB)
+│   │       │   │   │   └── wrapper.py (1.38 KB)
+│   │       │   │   ├── certifi/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.29 KB)
+│   │       │   │   │   │   ├── __main__.cpython-312.pyc (0.61 KB)
+│   │       │   │   │   │   └── core.cpython-312.pyc (3.11 KB)
+│   │       │   │   │   ├── __init__.py (0.09 KB)
+│   │       │   │   │   ├── __main__.py (0.25 KB)
+│   │       │   │   │   ├── cacert.pem (292.41 KB)
+│   │       │   │   │   ├── core.py (4.38 KB)
+│   │       │   │   │   └── py.typed (0.00 KB)
+│   │       │   │   ├── distlib/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (1.22 KB)
+│   │       │   │   │   │   ├── compat.cpython-312.pyc (44.44 KB)
+│   │       │   │   │   │   ├── database.cpython-312.pyc (64.02 KB)
+│   │       │   │   │   │   ├── index.cpython-312.pyc (23.72 KB)
+│   │       │   │   │   │   ├── locators.cpython-312.pyc (58.44 KB)
+│   │       │   │   │   │   ├── manifest.cpython-312.pyc (14.70 KB)
+│   │       │   │   │   │   ├── markers.cpython-312.pyc (7.45 KB)
+│   │       │   │   │   │   ├── metadata.cpython-312.pyc (40.56 KB)
+│   │       │   │   │   │   ├── resources.cpython-312.pyc (16.88 KB)
+│   │       │   │   │   │   ├── scripts.cpython-312.pyc (19.27 KB)
+│   │       │   │   │   │   ├── util.cpython-312.pyc (85.95 KB)
+│   │       │   │   │   │   ├── version.cpython-312.pyc (29.61 KB)
+│   │       │   │   │   │   └── wheel.cpython-312.pyc (51.29 KB)
+│   │       │   │   │   ├── __init__.py (0.61 KB)
+│   │       │   │   │   ├── compat.py (40.50 KB)
+│   │       │   │   │   ├── database.py (49.96 KB)
+│   │       │   │   │   ├── index.py (20.31 KB)
+│   │       │   │   │   ├── locators.py (49.83 KB)
+│   │       │   │   │   ├── manifest.py (13.84 KB)
+│   │       │   │   │   ├── markers.py (5.04 KB)
+│   │       │   │   │   ├── metadata.py (37.82 KB)
+│   │       │   │   │   ├── resources.py (10.57 KB)
+│   │       │   │   │   ├── scripts.py (18.17 KB)
+│   │       │   │   │   ├── t32.exe (95.50 KB)
+│   │       │   │   │   ├── t64-arm.exe (178.50 KB)
+│   │       │   │   │   ├── t64.exe (105.50 KB)
+│   │       │   │   │   ├── util.py (65.12 KB)
+│   │       │   │   │   ├── version.py (23.17 KB)
+│   │       │   │   │   ├── w32.exe (89.50 KB)
+│   │       │   │   │   ├── w64-arm.exe (164.50 KB)
+│   │       │   │   │   ├── w64.exe (99.50 KB)
+│   │       │   │   │   └── wheel.py (42.95 KB)
+│   │       │   │   ├── distro/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.92 KB)
+│   │       │   │   │   │   ├── __main__.cpython-312.pyc (0.26 KB)
+│   │       │   │   │   │   └── distro.cpython-312.pyc (52.51 KB)
+│   │       │   │   │   ├── __init__.py (0.96 KB)
+│   │       │   │   │   ├── __main__.py (0.06 KB)
+│   │       │   │   │   ├── distro.py (48.27 KB)
+│   │       │   │   │   └── py.typed (0.00 KB)
+│   │       │   │   ├── idna/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.84 KB)
+│   │       │   │   │   │   ├── codec.cpython-312.pyc (4.84 KB)
+│   │       │   │   │   │   ├── compat.cpython-312.pyc (0.85 KB)
+│   │       │   │   │   │   ├── core.cpython-312.pyc (15.72 KB)
+│   │       │   │   │   │   ├── idnadata.cpython-312.pyc (97.12 KB)
+│   │       │   │   │   │   ├── intranges.cpython-312.pyc (2.55 KB)
+│   │       │   │   │   │   ├── package_data.cpython-312.pyc (0.19 KB)
+│   │       │   │   │   │   └── uts46data.cpython-312.pyc (155.10 KB)
+│   │       │   │   │   ├── __init__.py (0.85 KB)
+│   │       │   │   │   ├── codec.py (3.34 KB)
+│   │       │   │   │   ├── compat.py (0.31 KB)
+│   │       │   │   │   ├── core.py (12.93 KB)
+│   │       │   │   │   ├── idnadata.py (76.47 KB)
+│   │       │   │   │   ├── intranges.py (1.85 KB)
+│   │       │   │   │   ├── package_data.py (0.02 KB)
+│   │       │   │   │   ├── py.typed (0.00 KB)
+│   │       │   │   │   └── uts46data.py (233.68 KB)
+│   │       │   │   ├── msgpack/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (1.68 KB)
+│   │       │   │   │   │   ├── exceptions.cpython-312.pyc (1.96 KB)
+│   │       │   │   │   │   ├── ext.cpython-312.pyc (8.08 KB)
+│   │       │   │   │   │   └── fallback.cpython-312.pyc (40.50 KB)
+│   │       │   │   │   ├── __init__.py (1.08 KB)
+│   │       │   │   │   ├── exceptions.py (1.06 KB)
+│   │       │   │   │   ├── ext.py (5.59 KB)
+│   │       │   │   │   └── fallback.py (31.63 KB)
+│   │       │   │   ├── packaging/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.52 KB)
+│   │       │   │   │   │   ├── _elffile.cpython-312.pyc (4.88 KB)
+│   │       │   │   │   │   ├── _manylinux.cpython-312.pyc (9.46 KB)
+│   │       │   │   │   │   ├── _musllinux.cpython-312.pyc (4.42 KB)
+│   │       │   │   │   │   ├── _parser.cpython-312.pyc (13.63 KB)
+│   │       │   │   │   │   ├── _structures.cpython-312.pyc (3.14 KB)
+│   │       │   │   │   │   ├── _tokenizer.cpython-312.pyc (7.71 KB)
+│   │       │   │   │   │   ├── markers.cpython-312.pyc (11.08 KB)
+│   │       │   │   │   │   ├── metadata.cpython-312.pyc (26.55 KB)
+│   │       │   │   │   │   ├── requirements.cpython-312.pyc (4.28 KB)
+│   │       │   │   │   │   ├── specifiers.cpython-312.pyc (38.10 KB)
+│   │       │   │   │   │   ├── tags.cpython-312.pyc (22.44 KB)
+│   │       │   │   │   │   ├── utils.cpython-312.pyc (6.46 KB)
+│   │       │   │   │   │   └── version.cpython-312.pyc (19.98 KB)
+│   │       │   │   │   ├── licenses/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (4.00 KB)
+│   │       │   │   │   │   │   └── _spdx.cpython-312.pyc (46.23 KB)
+│   │       │   │   │   │   ├── __init__.py (5.59 KB)
+│   │       │   │   │   │   └── _spdx.py (47.26 KB)
+│   │       │   │   │   ├── __init__.py (0.48 KB)
+│   │       │   │   │   ├── _elffile.py (3.23 KB)
+│   │       │   │   │   ├── _manylinux.py (9.39 KB)
+│   │       │   │   │   ├── _musllinux.py (2.63 KB)
+│   │       │   │   │   ├── _parser.py (10.00 KB)
+│   │       │   │   │   ├── _structures.py (1.40 KB)
+│   │       │   │   │   ├── _tokenizer.py (5.15 KB)
+│   │       │   │   │   ├── markers.py (10.31 KB)
+│   │       │   │   │   ├── metadata.py (33.95 KB)
+│   │       │   │   │   ├── py.typed (0.00 KB)
+│   │       │   │   │   ├── requirements.py (2.88 KB)
+│   │       │   │   │   ├── specifiers.py (39.16 KB)
+│   │       │   │   │   ├── tags.py (20.52 KB)
+│   │       │   │   │   ├── utils.py (4.93 KB)
+│   │       │   │   │   └── version.py (16.30 KB)
+│   │       │   │   ├── pkg_resources/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   └── __init__.cpython-312.pyc (157.46 KB)
+│   │       │   │   │   └── __init__.py (121.55 KB)
+│   │       │   │   ├── platformdirs/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (19.36 KB)
+│   │       │   │   │   │   ├── __main__.cpython-312.pyc (1.88 KB)
+│   │       │   │   │   │   ├── android.cpython-312.pyc (10.42 KB)
+│   │       │   │   │   │   ├── api.cpython-312.pyc (12.97 KB)
+│   │       │   │   │   │   ├── macos.cpython-312.pyc (8.59 KB)
+│   │       │   │   │   │   ├── unix.cpython-312.pyc (14.32 KB)
+│   │       │   │   │   │   ├── version.cpython-312.pyc (0.56 KB)
+│   │       │   │   │   │   └── windows.cpython-312.pyc (13.33 KB)
+│   │       │   │   │   ├── __init__.py (21.82 KB)
+│   │       │   │   │   ├── __main__.py (1.47 KB)
+│   │       │   │   │   ├── android.py (8.80 KB)
+│   │       │   │   │   ├── api.py (9.03 KB)
+│   │       │   │   │   ├── macos.py (6.01 KB)
+│   │       │   │   │   ├── py.typed (0.00 KB)
+│   │       │   │   │   ├── unix.py (10.15 KB)
+│   │       │   │   │   ├── version.py (0.40 KB)
+│   │       │   │   │   └── windows.py (9.89 KB)
+│   │       │   │   ├── pygments/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (3.38 KB)
+│   │       │   │   │   │   ├── __main__.cpython-312.pyc (0.70 KB)
+│   │       │   │   │   │   ├── cmdline.cpython-312.pyc (25.94 KB)
+│   │       │   │   │   │   ├── console.cpython-312.pyc (2.54 KB)
+│   │       │   │   │   │   ├── filter.cpython-312.pyc (3.12 KB)
+│   │       │   │   │   │   ├── formatter.cpython-312.pyc (4.59 KB)
+│   │       │   │   │   │   ├── lexer.cpython-312.pyc (37.44 KB)
+│   │       │   │   │   │   ├── modeline.cpython-312.pyc (1.50 KB)
+│   │       │   │   │   │   ├── plugin.cpython-312.pyc (2.53 KB)
+│   │       │   │   │   │   ├── regexopt.cpython-312.pyc (3.96 KB)
+│   │       │   │   │   │   ├── scanner.cpython-312.pyc (4.62 KB)
+│   │       │   │   │   │   ├── sphinxext.cpython-312.pyc (11.79 KB)
+│   │       │   │   │   │   ├── style.cpython-312.pyc (6.51 KB)
+│   │       │   │   │   │   ├── token.cpython-312.pyc (7.98 KB)
+│   │       │   │   │   │   ├── unistring.cpython-312.pyc (32.18 KB)
+│   │       │   │   │   │   └── util.cpython-312.pyc (13.72 KB)
+│   │       │   │   │   ├── filters/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   └── __init__.cpython-312.pyc (37.00 KB)
+│   │       │   │   │   │   └── __init__.py (39.45 KB)
+│   │       │   │   │   ├── formatters/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (6.72 KB)
+│   │       │   │   │   │   │   ├── _mapping.cpython-312.pyc (4.09 KB)
+│   │       │   │   │   │   │   ├── bbcode.cpython-312.pyc (4.10 KB)
+│   │       │   │   │   │   │   ├── groff.cpython-312.pyc (7.10 KB)
+│   │       │   │   │   │   │   ├── html.cpython-312.pyc (40.04 KB)
+│   │       │   │   │   │   │   ├── img.cpython-312.pyc (27.86 KB)
+│   │       │   │   │   │   │   ├── irc.cpython-312.pyc (5.89 KB)
+│   │       │   │   │   │   │   ├── latex.cpython-312.pyc (19.63 KB)
+│   │       │   │   │   │   │   ├── other.cpython-312.pyc (6.69 KB)
+│   │       │   │   │   │   │   ├── pangomarkup.cpython-312.pyc (2.87 KB)
+│   │       │   │   │   │   │   ├── rtf.cpython-312.pyc (13.43 KB)
+│   │       │   │   │   │   │   ├── svg.cpython-312.pyc (8.90 KB)
+│   │       │   │   │   │   │   ├── terminal.cpython-312.pyc (5.66 KB)
+│   │       │   │   │   │   │   └── terminal256.cpython-312.pyc (14.74 KB)
+│   │       │   │   │   │   ├── __init__.py (5.26 KB)
+│   │       │   │   │   │   ├── _mapping.py (4.08 KB)
+│   │       │   │   │   │   ├── bbcode.py (3.24 KB)
+│   │       │   │   │   │   ├── groff.py (4.99 KB)
+│   │       │   │   │   │   ├── html.py (34.83 KB)
+│   │       │   │   │   │   ├── img.py (22.74 KB)
+│   │       │   │   │   │   ├── irc.py (4.86 KB)
+│   │       │   │   │   │   ├── latex.py (18.85 KB)
+│   │       │   │   │   │   ├── other.py (4.92 KB)
+│   │       │   │   │   │   ├── pangomarkup.py (2.17 KB)
+│   │       │   │   │   │   ├── rtf.py (11.68 KB)
+│   │       │   │   │   │   ├── svg.py (7.01 KB)
+│   │       │   │   │   │   ├── terminal.py (4.56 KB)
+│   │       │   │   │   │   └── terminal256.py (11.48 KB)
+│   │       │   │   │   ├── lexers/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (14.26 KB)
+│   │       │   │   │   │   │   ├── _mapping.cpython-312.pyc (66.64 KB)
+│   │       │   │   │   │   │   └── python.cpython-312.pyc (41.94 KB)
+│   │       │   │   │   │   ├── __init__.py (11.83 KB)
+│   │       │   │   │   │   ├── _mapping.py (74.31 KB)
+│   │       │   │   │   │   └── python.py (52.43 KB)
+│   │       │   │   │   ├── styles/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (2.58 KB)
+│   │       │   │   │   │   │   └── _mapping.cpython-312.pyc (3.54 KB)
+│   │       │   │   │   │   ├── __init__.py (1.99 KB)
+│   │       │   │   │   │   └── _mapping.py (3.23 KB)
+│   │       │   │   │   ├── __init__.py (2.91 KB)
+│   │       │   │   │   ├── __main__.py (0.34 KB)
+│   │       │   │   │   ├── cmdline.py (23.10 KB)
+│   │       │   │   │   ├── console.py (1.68 KB)
+│   │       │   │   │   ├── filter.py (1.87 KB)
+│   │       │   │   │   ├── formatter.py (4.29 KB)
+│   │       │   │   │   ├── lexer.py (34.52 KB)
+│   │       │   │   │   ├── modeline.py (0.98 KB)
+│   │       │   │   │   ├── plugin.py (1.85 KB)
+│   │       │   │   │   ├── regexopt.py (3.00 KB)
+│   │       │   │   │   ├── scanner.py (3.02 KB)
+│   │       │   │   │   ├── sphinxext.py (7.79 KB)
+│   │       │   │   │   ├── style.py (6.27 KB)
+│   │       │   │   │   ├── token.py (6.08 KB)
+│   │       │   │   │   ├── unistring.py (61.73 KB)
+│   │       │   │   │   └── util.py (9.80 KB)
+│   │       │   │   ├── pyproject_hooks/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.71 KB)
+│   │       │   │   │   │   └── _impl.cpython-312.pyc (17.60 KB)
+│   │       │   │   │   ├── _in_process/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (1.03 KB)
+│   │       │   │   │   │   │   └── _in_process.cpython-312.pyc (14.93 KB)
+│   │       │   │   │   │   ├── __init__.py (0.54 KB)
+│   │       │   │   │   │   └── _in_process.py (11.93 KB)
+│   │       │   │   │   ├── __init__.py (0.67 KB)
+│   │       │   │   │   ├── _impl.py (14.59 KB)
+│   │       │   │   │   └── py.typed (0.00 KB)
+│   │       │   │   ├── requests/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (5.11 KB)
+│   │       │   │   │   │   ├── __version__.cpython-312.pyc (0.55 KB)
+│   │       │   │   │   │   ├── _internal_utils.cpython-312.pyc (1.96 KB)
+│   │       │   │   │   │   ├── adapters.cpython-312.pyc (27.74 KB)
+│   │       │   │   │   │   ├── api.cpython-312.pyc (7.00 KB)
+│   │       │   │   │   │   ├── auth.cpython-312.pyc (13.57 KB)
+│   │       │   │   │   │   ├── certs.cpython-312.pyc (0.64 KB)
+│   │       │   │   │   │   ├── compat.cpython-312.pyc (1.62 KB)
+│   │       │   │   │   │   ├── cookies.cpython-312.pyc (24.59 KB)
+│   │       │   │   │   │   ├── exceptions.cpython-312.pyc (7.40 KB)
+│   │       │   │   │   │   ├── help.cpython-312.pyc (4.11 KB)
+│   │       │   │   │   │   ├── hooks.cpython-312.pyc (1.00 KB)
+│   │       │   │   │   │   ├── models.cpython-312.pyc (34.58 KB)
+│   │       │   │   │   │   ├── packages.cpython-312.pyc (1.21 KB)
+│   │       │   │   │   │   ├── sessions.cpython-312.pyc (27.17 KB)
+│   │       │   │   │   │   ├── status_codes.cpython-312.pyc (5.86 KB)
+│   │       │   │   │   │   ├── structures.cpython-312.pyc (5.47 KB)
+│   │       │   │   │   │   └── utils.cpython-312.pyc (35.49 KB)
+│   │       │   │   │   ├── __init__.py (4.94 KB)
+│   │       │   │   │   ├── __version__.py (0.42 KB)
+│   │       │   │   │   ├── _internal_utils.py (1.46 KB)
+│   │       │   │   │   ├── adapters.py (26.96 KB)
+│   │       │   │   │   ├── api.py (6.30 KB)
+│   │       │   │   │   ├── auth.py (9.95 KB)
+│   │       │   │   │   ├── certs.py (0.43 KB)
+│   │       │   │   │   ├── compat.py (1.45 KB)
+│   │       │   │   │   ├── cookies.py (18.15 KB)
+│   │       │   │   │   ├── exceptions.py (4.17 KB)
+│   │       │   │   │   ├── help.py (3.72 KB)
+│   │       │   │   │   ├── hooks.py (0.72 KB)
+│   │       │   │   │   ├── models.py (34.65 KB)
+│   │       │   │   │   ├── packages.py (1.03 KB)
+│   │       │   │   │   ├── sessions.py (29.78 KB)
+│   │       │   │   │   ├── status_codes.py (4.22 KB)
+│   │       │   │   │   ├── structures.py (2.84 KB)
+│   │       │   │   │   └── utils.py (32.84 KB)
+│   │       │   │   ├── resolvelib/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.60 KB)
+│   │       │   │   │   │   ├── providers.cpython-312.pyc (6.67 KB)
+│   │       │   │   │   │   ├── reporters.cpython-312.pyc (2.57 KB)
+│   │       │   │   │   │   ├── resolvers.cpython-312.pyc (25.25 KB)
+│   │       │   │   │   │   └── structs.cpython-312.pyc (10.23 KB)
+│   │       │   │   │   ├── compat/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (0.17 KB)
+│   │       │   │   │   │   │   └── collections_abc.cpython-312.pyc (0.39 KB)
+│   │       │   │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   │   └── collections_abc.py (0.15 KB)
+│   │       │   │   │   ├── __init__.py (0.52 KB)
+│   │       │   │   │   ├── providers.py (5.73 KB)
+│   │       │   │   │   ├── py.typed (0.00 KB)
+│   │       │   │   │   ├── reporters.py (1.56 KB)
+│   │       │   │   │   ├── resolvers.py (20.03 KB)
+│   │       │   │   │   └── structs.py (4.85 KB)
+│   │       │   │   ├── rich/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (6.83 KB)
+│   │       │   │   │   │   ├── __main__.cpython-312.pyc (10.03 KB)
+│   │       │   │   │   │   ├── _cell_widths.cpython-312.pyc (7.67 KB)
+│   │       │   │   │   │   ├── _emoji_codes.cpython-312.pyc (201.13 KB)
+│   │       │   │   │   │   ├── _emoji_replace.cpython-312.pyc (1.67 KB)
+│   │       │   │   │   │   ├── _export_format.cpython-312.pyc (2.27 KB)
+│   │       │   │   │   │   ├── _extension.cpython-312.pyc (0.50 KB)
+│   │       │   │   │   │   ├── _fileno.cpython-312.pyc (0.81 KB)
+│   │       │   │   │   │   ├── _inspect.cpython-312.pyc (11.72 KB)
+│   │       │   │   │   │   ├── _log_render.cpython-312.pyc (4.03 KB)
+│   │       │   │   │   │   ├── _loop.cpython-312.pyc (1.80 KB)
+│   │       │   │   │   │   ├── _null_file.cpython-312.pyc (3.52 KB)
+│   │       │   │   │   │   ├── _palettes.cpython-312.pyc (5.02 KB)
+│   │       │   │   │   │   ├── _pick.cpython-312.pyc (0.68 KB)
+│   │       │   │   │   │   ├── _ratio.cpython-312.pyc (6.39 KB)
+│   │       │   │   │   │   ├── _spinners.cpython-312.pyc (12.85 KB)
+│   │       │   │   │   │   ├── _stack.cpython-312.pyc (0.92 KB)
+│   │       │   │   │   │   ├── _timer.cpython-312.pyc (0.82 KB)
+│   │       │   │   │   │   ├── _win32_console.cpython-312.pyc (28.11 KB)
+│   │       │   │   │   │   ├── _windows.cpython-312.pyc (2.41 KB)
+│   │       │   │   │   │   ├── _windows_renderer.cpython-312.pyc (3.46 KB)
+│   │       │   │   │   │   ├── _wrap.cpython-312.pyc (3.23 KB)
+│   │       │   │   │   │   ├── abc.cpython-312.pyc (1.55 KB)
+│   │       │   │   │   │   ├── align.cpython-312.pyc (12.08 KB)
+│   │       │   │   │   │   ├── ansi.cpython-312.pyc (8.85 KB)
+│   │       │   │   │   │   ├── bar.cpython-312.pyc (4.15 KB)
+│   │       │   │   │   │   ├── box.cpython-312.pyc (11.54 KB)
+│   │       │   │   │   │   ├── cells.cpython-312.pyc (5.41 KB)
+│   │       │   │   │   │   ├── color.cpython-312.pyc (25.91 KB)
+│   │       │   │   │   │   ├── color_triplet.cpython-312.pyc (1.64 KB)
+│   │       │   │   │   │   ├── columns.cpython-312.pyc (8.36 KB)
+│   │       │   │   │   │   ├── console.cpython-312.pyc (111.84 KB)
+│   │       │   │   │   │   ├── constrain.cpython-312.pyc (2.18 KB)
+│   │       │   │   │   │   ├── containers.cpython-312.pyc (8.97 KB)
+│   │       │   │   │   │   ├── control.cpython-312.pyc (10.66 KB)
+│   │       │   │   │   │   ├── default_styles.cpython-312.pyc (10.17 KB)
+│   │       │   │   │   │   ├── diagnose.cpython-312.pyc (1.43 KB)
+│   │       │   │   │   │   ├── emoji.cpython-312.pyc (4.09 KB)
+│   │       │   │   │   │   ├── errors.cpython-312.pyc (1.78 KB)
+│   │       │   │   │   │   ├── file_proxy.cpython-312.pyc (3.47 KB)
+│   │       │   │   │   │   ├── filesize.cpython-312.pyc (2.95 KB)
+│   │       │   │   │   │   ├── highlighter.cpython-312.pyc (9.63 KB)
+│   │       │   │   │   │   ├── json.cpython-312.pyc (5.87 KB)
+│   │       │   │   │   │   ├── jupyter.cpython-312.pyc (5.06 KB)
+│   │       │   │   │   │   ├── layout.cpython-312.pyc (19.66 KB)
+│   │       │   │   │   │   ├── live.cpython-312.pyc (18.54 KB)
+│   │       │   │   │   │   ├── live_render.cpython-312.pyc (4.75 KB)
+│   │       │   │   │   │   ├── logging.cpython-312.pyc (13.71 KB)
+│   │       │   │   │   │   ├── markup.cpython-312.pyc (9.32 KB)
+│   │       │   │   │   │   ├── measure.cpython-312.pyc (6.21 KB)
+│   │       │   │   │   │   ├── padding.cpython-312.pyc (6.75 KB)
+│   │       │   │   │   │   ├── pager.cpython-312.pyc (1.75 KB)
+│   │       │   │   │   │   ├── palette.cpython-312.pyc (5.15 KB)
+│   │       │   │   │   │   ├── panel.cpython-312.pyc (12.45 KB)
+│   │       │   │   │   │   ├── pretty.cpython-312.pyc (39.64 KB)
+│   │       │   │   │   │   ├── progress.cpython-312.pyc (73.94 KB)
+│   │       │   │   │   │   ├── progress_bar.cpython-312.pyc (10.11 KB)
+│   │       │   │   │   │   ├── prompt.cpython-312.pyc (15.61 KB)
+│   │       │   │   │   │   ├── protocol.cpython-312.pyc (1.73 KB)
+│   │       │   │   │   │   ├── region.cpython-312.pyc (0.53 KB)
+│   │       │   │   │   │   ├── repr.cpython-312.pyc (6.44 KB)
+│   │       │   │   │   │   ├── rule.cpython-312.pyc (6.39 KB)
+│   │       │   │   │   │   ├── scope.cpython-312.pyc (3.71 KB)
+│   │       │   │   │   │   ├── screen.cpython-312.pyc (2.40 KB)
+│   │       │   │   │   │   ├── segment.cpython-312.pyc (27.85 KB)
+│   │       │   │   │   │   ├── spinner.cpython-312.pyc (5.93 KB)
+│   │       │   │   │   │   ├── status.cpython-312.pyc (5.90 KB)
+│   │       │   │   │   │   ├── style.cpython-312.pyc (32.67 KB)
+│   │       │   │   │   │   ├── styled.cpython-312.pyc (2.07 KB)
+│   │       │   │   │   │   ├── syntax.cpython-312.pyc (39.22 KB)
+│   │       │   │   │   │   ├── table.cpython-312.pyc (42.83 KB)
+│   │       │   │   │   │   ├── terminal_theme.cpython-312.pyc (3.25 KB)
+│   │       │   │   │   │   ├── text.cpython-312.pyc (59.75 KB)
+│   │       │   │   │   │   ├── theme.cpython-312.pyc (6.16 KB)
+│   │       │   │   │   │   ├── themes.cpython-312.pyc (0.29 KB)
+│   │       │   │   │   │   ├── traceback.cpython-312.pyc (32.10 KB)
+│   │       │   │   │   │   └── tree.cpython-312.pyc (11.50 KB)
+│   │       │   │   │   ├── __init__.py (5.95 KB)
+│   │       │   │   │   ├── __main__.py (8.28 KB)
+│   │       │   │   │   ├── _cell_widths.py (9.97 KB)
+│   │       │   │   │   ├── _emoji_codes.py (136.95 KB)
+│   │       │   │   │   ├── _emoji_replace.py (1.04 KB)
+│   │       │   │   │   ├── _export_format.py (2.08 KB)
+│   │       │   │   │   ├── _extension.py (0.26 KB)
+│   │       │   │   │   ├── _fileno.py (0.78 KB)
+│   │       │   │   │   ├── _inspect.py (9.43 KB)
+│   │       │   │   │   ├── _log_render.py (3.15 KB)
+│   │       │   │   │   ├── _loop.py (1.21 KB)
+│   │       │   │   │   ├── _null_file.py (1.36 KB)
+│   │       │   │   │   ├── _palettes.py (6.90 KB)
+│   │       │   │   │   ├── _pick.py (0.41 KB)
+│   │       │   │   │   ├── _ratio.py (5.34 KB)
+│   │       │   │   │   ├── _spinners.py (19.45 KB)
+│   │       │   │   │   ├── _stack.py (0.34 KB)
+│   │       │   │   │   ├── _timer.py (0.41 KB)
+│   │       │   │   │   ├── _win32_console.py (22.22 KB)
+│   │       │   │   │   ├── _windows.py (1.88 KB)
+│   │       │   │   │   ├── _windows_renderer.py (2.72 KB)
+│   │       │   │   │   ├── _wrap.py (3.32 KB)
+│   │       │   │   │   ├── abc.py (0.87 KB)
+│   │       │   │   │   ├── align.py (10.22 KB)
+│   │       │   │   │   ├── ansi.py (6.76 KB)
+│   │       │   │   │   ├── bar.py (3.19 KB)
+│   │       │   │   │   ├── box.py (10.58 KB)
+│   │       │   │   │   ├── cells.py (5.01 KB)
+│   │       │   │   │   ├── color.py (17.78 KB)
+│   │       │   │   │   ├── color_triplet.py (1.03 KB)
+│   │       │   │   │   ├── columns.py (6.96 KB)
+│   │       │   │   │   ├── console.py (97.81 KB)
+│   │       │   │   │   ├── constrain.py (1.26 KB)
+│   │       │   │   │   ├── containers.py (5.37 KB)
+│   │       │   │   │   ├── control.py (6.47 KB)
+│   │       │   │   │   ├── default_styles.py (7.97 KB)
+│   │       │   │   │   ├── diagnose.py (0.95 KB)
+│   │       │   │   │   ├── emoji.py (2.44 KB)
+│   │       │   │   │   ├── errors.py (0.63 KB)
+│   │       │   │   │   ├── file_proxy.py (1.64 KB)
+│   │       │   │   │   ├── filesize.py (2.43 KB)
+│   │       │   │   │   ├── highlighter.py (9.36 KB)
+│   │       │   │   │   ├── json.py (4.91 KB)
+│   │       │   │   │   ├── jupyter.py (3.18 KB)
+│   │       │   │   │   ├── layout.py (13.68 KB)
+│   │       │   │   │   ├── live.py (13.94 KB)
+│   │       │   │   │   ├── live_render.py (3.58 KB)
+│   │       │   │   │   ├── logging.py (12.17 KB)
+│   │       │   │   │   ├── markup.py (8.25 KB)
+│   │       │   │   │   ├── measure.py (5.18 KB)
+│   │       │   │   │   ├── padding.py (4.79 KB)
+│   │       │   │   │   ├── pager.py (0.81 KB)
+│   │       │   │   │   ├── palette.py (3.32 KB)
+│   │       │   │   │   ├── panel.py (10.97 KB)
+│   │       │   │   │   ├── pretty.py (35.54 KB)
+│   │       │   │   │   ├── progress.py (58.94 KB)
+│   │       │   │   │   ├── progress_bar.py (7.97 KB)
+│   │       │   │   │   ├── prompt.py (12.16 KB)
+│   │       │   │   │   ├── protocol.py (1.36 KB)
+│   │       │   │   │   ├── py.typed (0.00 KB)
+│   │       │   │   │   ├── region.py (0.16 KB)
+│   │       │   │   │   ├── repr.py (4.33 KB)
+│   │       │   │   │   ├── rule.py (4.49 KB)
+│   │       │   │   │   ├── scope.py (2.78 KB)
+│   │       │   │   │   ├── screen.py (1.55 KB)
+│   │       │   │   │   ├── segment.py (24.16 KB)
+│   │       │   │   │   ├── spinner.py (4.26 KB)
+│   │       │   │   │   ├── status.py (4.32 KB)
+│   │       │   │   │   ├── style.py (26.43 KB)
+│   │       │   │   │   ├── styled.py (1.23 KB)
+│   │       │   │   │   ├── syntax.py (34.92 KB)
+│   │       │   │   │   ├── table.py (39.16 KB)
+│   │       │   │   │   ├── terminal_theme.py (3.29 KB)
+│   │       │   │   │   ├── text.py (46.44 KB)
+│   │       │   │   │   ├── theme.py (3.68 KB)
+│   │       │   │   │   ├── themes.py (0.10 KB)
+│   │       │   │   │   ├── traceback.py (31.05 KB)
+│   │       │   │   │   └── tree.py (9.23 KB)
+│   │       │   │   ├── tomli/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (0.31 KB)
+│   │       │   │   │   │   ├── _parser.cpython-312.pyc (28.64 KB)
+│   │       │   │   │   │   ├── _re.cpython-312.pyc (3.92 KB)
+│   │       │   │   │   │   └── _types.cpython-312.pyc (0.34 KB)
+│   │       │   │   │   ├── __init__.py (0.31 KB)
+│   │       │   │   │   ├── _parser.py (24.99 KB)
+│   │       │   │   │   ├── _re.py (3.10 KB)
+│   │       │   │   │   ├── _types.py (0.25 KB)
+│   │       │   │   │   └── py.typed (0.03 KB)
+│   │       │   │   ├── truststore/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (1.29 KB)
+│   │       │   │   │   │   ├── _api.cpython-312.pyc (16.36 KB)
+│   │       │   │   │   │   ├── _macos.cpython-312.pyc (18.52 KB)
+│   │       │   │   │   │   ├── _openssl.cpython-312.pyc (2.13 KB)
+│   │       │   │   │   │   ├── _ssl_constants.cpython-312.pyc (1.05 KB)
+│   │       │   │   │   │   └── _windows.cpython-312.pyc (15.37 KB)
+│   │       │   │   │   ├── __init__.py (1.23 KB)
+│   │       │   │   │   ├── _api.py (10.31 KB)
+│   │       │   │   │   ├── _macos.py (20.02 KB)
+│   │       │   │   │   ├── _openssl.py (2.27 KB)
+│   │       │   │   │   ├── _ssl_constants.py (1.10 KB)
+│   │       │   │   │   ├── _windows.py (17.57 KB)
+│   │       │   │   │   └── py.typed (0.00 KB)
+│   │       │   │   ├── urllib3/
+│   │       │   │   │   ├── __pycache__/
+│   │       │   │   │   │   ├── __init__.cpython-312.pyc (3.30 KB)
+│   │       │   │   │   │   ├── _collections.cpython-312.pyc (15.96 KB)
+│   │       │   │   │   │   ├── _version.cpython-312.pyc (0.19 KB)
+│   │       │   │   │   │   ├── connection.cpython-312.pyc (19.90 KB)
+│   │       │   │   │   │   ├── connectionpool.cpython-312.pyc (35.66 KB)
+│   │       │   │   │   │   ├── exceptions.cpython-312.pyc (13.16 KB)
+│   │       │   │   │   │   ├── fields.cpython-312.pyc (10.14 KB)
+│   │       │   │   │   │   ├── filepost.cpython-312.pyc (3.90 KB)
+│   │       │   │   │   │   ├── poolmanager.cpython-312.pyc (19.93 KB)
+│   │       │   │   │   │   ├── request.cpython-312.pyc (7.10 KB)
+│   │       │   │   │   │   └── response.cpython-312.pyc (33.13 KB)
+│   │       │   │   │   ├── contrib/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (0.17 KB)
+│   │       │   │   │   │   │   ├── _appengine_environ.cpython-312.pyc (1.78 KB)
+│   │       │   │   │   │   │   ├── appengine.cpython-312.pyc (11.27 KB)
+│   │       │   │   │   │   │   ├── ntlmpool.cpython-312.pyc (5.56 KB)
+│   │       │   │   │   │   │   ├── pyopenssl.cpython-312.pyc (23.85 KB)
+│   │       │   │   │   │   │   ├── securetransport.cpython-312.pyc (34.65 KB)
+│   │       │   │   │   │   │   └── socks.cpython-312.pyc (7.31 KB)
+│   │       │   │   │   │   ├── _securetransport/
+│   │       │   │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   │   ├── __init__.cpython-312.pyc (0.19 KB)
+│   │       │   │   │   │   │   │   ├── bindings.cpython-312.pyc (17.00 KB)
+│   │       │   │   │   │   │   │   └── low_level.cpython-312.pyc (14.40 KB)
+│   │       │   │   │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   │   │   ├── bindings.py (17.22 KB)
+│   │       │   │   │   │   │   └── low_level.py (13.60 KB)
+│   │       │   │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   │   ├── _appengine_environ.py (0.93 KB)
+│   │       │   │   │   │   ├── appengine.py (10.78 KB)
+│   │       │   │   │   │   ├── ntlmpool.py (4.42 KB)
+│   │       │   │   │   │   ├── pyopenssl.py (16.68 KB)
+│   │       │   │   │   │   ├── securetransport.py (33.64 KB)
+│   │       │   │   │   │   └── socks.py (6.93 KB)
+│   │       │   │   │   ├── packages/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (0.17 KB)
+│   │       │   │   │   │   │   └── six.cpython-312.pyc (40.27 KB)
+│   │       │   │   │   │   ├── backports/
+│   │       │   │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   │   ├── __init__.cpython-312.pyc (0.18 KB)
+│   │       │   │   │   │   │   │   ├── makefile.cpython-312.pyc (1.76 KB)
+│   │       │   │   │   │   │   │   └── weakref_finalize.cpython-312.pyc (7.14 KB)
+│   │       │   │   │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   │   │   ├── makefile.py (1.38 KB)
+│   │       │   │   │   │   │   └── weakref_finalize.py (5.22 KB)
+│   │       │   │   │   │   ├── __init__.py (0.00 KB)
+│   │       │   │   │   │   └── six.py (33.85 KB)
+│   │       │   │   │   ├── util/
+│   │       │   │   │   │   ├── __pycache__/
+│   │       │   │   │   │   │   ├── __init__.cpython-312.pyc (1.10 KB)
+│   │       │   │   │   │   │   ├── connection.cpython-312.pyc (4.61 KB)
+│   │       │   │   │   │   │   ├── proxy.cpython-312.pyc (1.49 KB)
+│   │       │   │   │   │   │   ├── queue.cpython-312.pyc (1.30 KB)
+│   │       │   │   │   │   │   ├── request.cpython-312.pyc (4.06 KB)
+│   │       │   │   │   │   │   ├── response.cpython-312.pyc (2.90 KB)
+│   │       │   │   │   │   │   ├── retry.cpython-312.pyc (21.19 KB)
+│   │       │   │   │   │   │   ├── ssl_.cpython-312.pyc (14.98 KB)
+│   │       │   │   │   │   │   ├── ssl_match_hostname.cpython-312.pyc (4.91 KB)
+│   │       │   │   │   │   │   ├── ssltransport.cpython-312.pyc (10.48 KB)
+│   │       │   │   │   │   │   ├── timeout.cpython-312.pyc (10.86 KB)
+│   │       │   │   │   │   │   ├── url.cpython-312.pyc (15.39 KB)
+│   │       │   │   │   │   │   └── wait.cpython-312.pyc (4.28 KB)
+│   │       │   │   │   │   ├── __init__.py (1.13 KB)
+│   │       │   │   │   │   ├── connection.py (4.79 KB)
+│   │       │   │   │   │   ├── proxy.py (1.57 KB)
+│   │       │   │   │   │   ├── queue.py (0.49 KB)
+│   │       │   │   │   │   ├── request.py (3.90 KB)
+│   │       │   │   │   │   ├── response.py (3.43 KB)
+│   │       │   │   │   │   ├── retry.py (21.53 KB)
+│   │       │   │   │   │   ├── ssl_.py (17.05 KB)
+│   │       │   │   │   │   ├── ssl_match_hostname.py (5.62 KB)
+│   │       │   │   │   │   ├── ssltransport.py (6.73 KB)
+│   │       │   │   │   │   ├── timeout.py (9.93 KB)
+│   │       │   │   │   │   ├── url.py (13.96 KB)
+│   │       │   │   │   │   └── wait.py (5.28 KB)
+│   │       │   │   │   ├── __init__.py (3.25 KB)
+│   │       │   │   │   ├── _collections.py (11.11 KB)
+│   │       │   │   │   ├── _version.py (0.06 KB)
+│   │       │   │   │   ├── connection.py (19.84 KB)
+│   │       │   │   │   ├── connectionpool.py (39.46 KB)
+│   │       │   │   │   ├── exceptions.py (8.02 KB)
+│   │       │   │   │   ├── fields.py (8.38 KB)
+│   │       │   │   │   ├── filepost.py (2.38 KB)
+│   │       │   │   │   ├── poolmanager.py (19.52 KB)
+│   │       │   │   │   ├── request.py (6.53 KB)
+│   │       │   │   │   └── response.py (29.92 KB)
+│   │       │   │   ├── __init__.py (4.76 KB)
+│   │       │   │   ├── typing_extensions.py (131.35 KB)
+│   │       │   │   └── vendor.txt (0.33 KB)
+│   │       │   ├── __init__.py (0.35 KB)
+│   │       │   ├── __main__.py (0.83 KB)
+│   │       │   ├── __pip-runner__.py (1.42 KB)
+│   │       │   └── py.typed (0.28 KB)
+│   │       └── pip-25.0.1.dist-info/
+│   │           ├── AUTHORS.txt (10.76 KB)
+│   │           ├── INSTALLER (0.00 KB)
+│   │           ├── LICENSE.txt (1.07 KB)
+│   │           ├── METADATA (3.59 KB)
+│   │           ├── RECORD (64.20 KB)
+│   │           ├── REQUESTED (0.00 KB)
+│   │           ├── WHEEL (0.09 KB)
+│   │           ├── entry_points.txt (0.08 KB)
+│   │           └── top_level.txt (0.00 KB)
+│   ├── Scripts/
+│   │   ├── Activate.ps1 (27.32 KB)
+│   │   ├── activate (2.12 KB)
+│   │   ├── activate.bat (0.97 KB)
+│   │   ├── deactivate.bat (0.38 KB)
+│   │   ├── pip.exe (105.86 KB)
+│   │   ├── pip3.12.exe (105.86 KB)
+│   │   ├── pip3.exe (105.86 KB)
+│   │   ├── python.exe (267.99 KB)
+│   │   └── pythonw.exe (257.23 KB)
+│   └── pyvenv.cfg (0.31 KB)
+├── README.md (5.41 KB)
+├── app.py (5.02 KB)
+├── dataset.py (2.23 KB)
+├── generate_workspace_summary.py (4.91 KB)
+├── inr_macro_dataset.csv (689.91 KB)
+├── inr_predictor_model.pkl (346.94 KB)
+├── requirements.txt (0.06 KB)
+├── workspace_summary.txt (64.32 KB)
+└── xgboost_cprd.py (2.40 KB)
+
+--------------------------------------------------------------------------------
+FILE STATISTICS
+--------------------------------------------------------------------------------
+
+Total Directories: 109
+Total Files: 871
+Total Size: 12.54 MB
+
+File Types Breakdown:
+----------------------------------------
+.bat                     2 files        1.36 KB
+.cfg                     1 files        0.31 KB
+.csv                     1 files      689.91 KB
+.exe                    11 files     1575.79 KB
+.json                    1 files        0.16 KB
+.md                      1 files        5.41 KB
+.pem                     1 files      292.41 KB
+.pkl                     1 files      346.94 KB
+.ps1                     1 files       27.32 KB
+.py                    415 files     4557.54 KB
+.pyc                   411 files     5193.97 KB
+.txt                     7 files       76.62 KB
+.typed                  12 files        0.30 KB
+[No Extension]           6 files       70.00 KB
+
+--------------------------------------------------------------------------------
+DETAILED FILE LISTING
+--------------------------------------------------------------------------------
+
+
+[Root]
+  README.md                                      5.41 KB
+  app.py                                         5.02 KB
+  dataset.py                                     2.23 KB
+  generate_workspace_summary.py                  4.91 KB
+  inr_macro_dataset.csv                        689.91 KB
+  inr_predictor_model.pkl                      346.94 KB
+  requirements.txt                               0.06 KB
+  workspace_summary.txt                         72.35 KB
+  xgboost_cprd.py                                2.40 KB
+
+.opencode/
+  server.lock.json                               0.16 KB
+
+venv/
+  pyvenv.cfg                                     0.31 KB
+
+venv\Lib\site-packages\pip/
+  __init__.py                                    0.35 KB
+  __main__.py                                    0.83 KB
+  __pip-runner__.py                              1.42 KB
+  py.typed                                       0.28 KB
+
+venv\Lib\site-packages\pip\_internal/
+  __init__.py                                    0.50 KB
+  build_env.py                                  10.45 KB
+  cache.py                                      10.13 KB
+  configuration.py                              13.68 KB
+  exceptions.py                                 25.86 KB
+  main.py                                        0.33 KB
+  pyproject.py                                   7.12 KB
+  self_outdated_check.py                         8.12 KB
+  wheel_builder.py                              11.52 KB
+
+venv\Lib\site-packages\pip\_internal\cli/
+  __init__.py                                    0.13 KB
+  autocompletion.py                              6.70 KB
+  base_command.py                                8.42 KB
+  cmdoptions.py                                 29.41 KB
+  command_context.py                             0.76 KB
+  index_command.py                               5.54 KB
+  main.py                                        2.75 KB
+  main_parser.py                                 4.24 KB
+  parser.py                                     10.57 KB
+  progress_bars.py                               2.65 KB
+  req_command.py                                11.96 KB
+  spinners.py                                    5.00 KB
+  status_codes.py                                0.11 KB
+
+venv\Lib\site-packages\pip\_internal\cli\__pycache__/
+  __init__.cpython-312.pyc                       0.25 KB
+  autocompletion.cpython-312.pyc                 8.38 KB
+  base_command.cpython-312.pyc                  10.24 KB
+  cmdoptions.cpython-312.pyc                    29.67 KB
+  command_context.cpython-312.pyc                1.71 KB
+  index_command.cpython-312.pyc                  6.99 KB
+  main.cpython-312.pyc                           2.22 KB
+  main_parser.cpython-312.pyc                    4.77 KB
+  parser.cpython-312.pyc                        14.66 KB
+  progress_bars.cpython-312.pyc                  3.74 KB
+  req_command.cpython-312.pyc                   11.93 KB
+  spinners.cpython-312.pyc                       7.63 KB
+  status_codes.cpython-312.pyc                   0.34 KB
+
+venv\Lib\site-packages\pip\_internal\commands/
+  __init__.py                                    3.79 KB
+  cache.py                                       7.92 KB
+  check.py                                       2.21 KB
+  completion.py                                  4.19 KB
+  configuration.py                               9.54 KB
+  debug.py                                       6.64 KB
+  download.py                                    5.15 KB
+  freeze.py                                      3.13 KB
+  hash.py                                        1.66 KB
+  help.py                                        1.11 KB
+  index.py                                       4.62 KB
+  inspect.py                                     3.11 KB
+  install.py                                    28.70 KB
+  list.py                                       12.47 KB
+  search.py                                      5.49 KB
+  show.py                                        7.67 KB
+  uninstall.py                                   3.80 KB
+  wheel.py                                       6.26 KB
+
+venv\Lib\site-packages\pip\_internal\commands\__pycache__/
+  __init__.cpython-312.pyc                       3.88 KB
+  cache.cpython-312.pyc                          9.67 KB
+  check.cpython-312.pyc                          2.51 KB
+  completion.cpython-312.pyc                     5.05 KB
+  configuration.cpython-312.pyc                 12.83 KB
+  debug.cpython-312.pyc                          9.81 KB
+  download.cpython-312.pyc                       7.30 KB
+  freeze.cpython-312.pyc                         4.26 KB
+  hash.cpython-312.pyc                           2.88 KB
+  help.cpython-312.pyc                           1.61 KB
+  index.cpython-312.pyc                          6.49 KB
+  inspect.cpython-312.pyc                        3.86 KB
+  install.cpython-312.pyc                       28.39 KB
+  list.cpython-312.pyc                          15.36 KB
+  search.cpython-312.pyc                         7.32 KB
+  show.cpython-312.pyc                          10.66 KB
+  uninstall.cpython-312.pyc                      4.58 KB
+  wheel.cpython-312.pyc                          8.63 KB
+
+venv\Lib\site-packages\pip\_internal\distributions/
+  __init__.py                                    0.84 KB
+  base.py                                        1.74 KB
+  installed.py                                   0.82 KB
+  sdist.py                                       6.59 KB
+  wheel.py                                       1.29 KB
+
+venv\Lib\site-packages\pip\_internal\distributions\__pycache__/
+  __init__.cpython-312.pyc                       0.90 KB
+  base.cpython-312.pyc                           2.80 KB
+  installed.cpython-312.pyc                      1.64 KB
+  sdist.cpython-312.pyc                          8.21 KB
+  wheel.cpython-312.pyc                          2.20 KB
+
+venv\Lib\site-packages\pip\_internal\index/
+  __init__.py                                    0.03 KB
+  collector.py                                  15.88 KB
+  package_finder.py                             37.18 KB
+  sources.py                                     8.43 KB
+
+venv\Lib\site-packages\pip\_internal\index\__pycache__/
+  __init__.cpython-312.pyc                       0.20 KB
+  collector.cpython-312.pyc                     21.09 KB
+  package_finder.cpython-312.pyc                40.37 KB
+  sources.cpython-312.pyc                       12.21 KB
+
+venv\Lib\site-packages\pip\_internal\locations/
+  __init__.py                                   14.58 KB
+  _distutils.py                                  5.87 KB
+  _sysconfig.py                                  7.54 KB
+  base.py                                        2.50 KB
+
+venv\Lib\site-packages\pip\_internal\locations\__pycache__/
+  __init__.cpython-312.pyc                      16.03 KB
+  _distutils.cpython-312.pyc                     6.61 KB
+  _sysconfig.cpython-312.pyc                     7.82 KB
+  base.cpython-312.pyc                           3.67 KB
+
+venv\Lib\site-packages\pip\_internal\metadata/
+  __init__.py                                    4.24 KB
+  _json.py                                       2.64 KB
+  base.py                                       24.71 KB
+  pkg_resources.py                              10.29 KB
+
+venv\Lib\site-packages\pip\_internal\metadata\importlib/
+  __init__.py                                    0.13 KB
+  _compat.py                                     2.73 KB
+  _dists.py                                      8.08 KB
+  _envs.py                                       7.26 KB
+
+venv\Lib\site-packages\pip\_internal\metadata\importlib\__pycache__/
+  __init__.cpython-312.pyc                       0.33 KB
+  _compat.cpython-312.pyc                        4.36 KB
+  _dists.cpython-312.pyc                        12.55 KB
+  _envs.cpython-312.pyc                         10.80 KB
+
+venv\Lib\site-packages\pip\_internal\metadata\__pycache__/
+  __init__.cpython-312.pyc                       5.71 KB
+  _json.cpython-312.pyc                          2.87 KB
+  base.cpython-312.pyc                          34.35 KB
+  pkg_resources.cpython-312.pyc                 15.68 KB
+
+venv\Lib\site-packages\pip\_internal\models/
+  __init__.py                                    0.06 KB
+  candidate.py                                   0.74 KB
+  direct_url.py                                  6.42 KB
+  format_control.py                              2.43 KB
+  index.py                                       1.01 KB
+  installation_report.py                         2.75 KB
+  link.py                                       20.95 KB
+  scheme.py                                      0.56 KB
+  search_scope.py                                4.42 KB
+  selection_prefs.py                             1.97 KB
+  target_python.py                               4.17 KB
+  wheel.py                                       4.43 KB
+
+venv\Lib\site-packages\pip\_internal\models\__pycache__/
+  __init__.cpython-312.pyc                       0.24 KB
+  candidate.cpython-312.pyc                      1.54 KB
+  direct_url.cpython-312.pyc                    10.57 KB
+  format_control.cpython-312.pyc                 4.10 KB
+  index.cpython-312.pyc                          1.63 KB
+  installation_report.cpython-312.pyc            2.20 KB
+  link.cpython-312.pyc                          26.33 KB
+  scheme.cpython-312.pyc                         0.98 KB
+  search_scope.cpython-312.pyc                   4.85 KB
+  selection_prefs.cpython-312.pyc                1.78 KB
+  target_python.cpython-312.pyc                  4.81 KB
+  wheel.cpython-312.pyc                          6.38 KB
+
+venv\Lib\site-packages\pip\_internal\network/
+  __init__.py                                    0.05 KB
+  auth.py                                       20.32 KB
+  cache.py                                       4.51 KB
+  download.py                                    5.91 KB
+  lazy_wheel.py                                  7.44 KB
+  session.py                                    18.33 KB
+  utils.py                                       3.99 KB
+  xmlrpc.py                                      1.79 KB
+
+venv\Lib\site-packages\pip\_internal\network\__pycache__/
+  __init__.cpython-312.pyc                       0.22 KB
+  auth.cpython-312.pyc                          21.56 KB
+  cache.cpython-312.pyc                          6.86 KB
+  download.cpython-312.pyc                       8.26 KB
+  lazy_wheel.cpython-312.pyc                    11.31 KB
+  session.cpython-312.pyc                       18.44 KB
+  utils.cpython-312.pyc                          2.18 KB
+  xmlrpc.cpython-312.pyc                         2.86 KB
+
+venv\Lib\site-packages\pip\_internal\operations/
+  __init__.py                                    0.00 KB
+  check.py                                       5.77 KB
+  freeze.py                                      9.61 KB
+  prepare.py                                    27.46 KB
+
+venv\Lib\site-packages\pip\_internal\operations\build/
+  __init__.py                                    0.00 KB
+  build_tracker.py                               4.66 KB
+  metadata.py                                    1.39 KB
+  metadata_editable.py                           1.47 KB
+  metadata_legacy.py                             2.14 KB
+  wheel.py                                       1.05 KB
+  wheel_editable.py                              1.38 KB
+  wheel_legacy.py                                2.97 KB
+
+venv\Lib\site-packages\pip\_internal\operations\build\__pycache__/
+  __init__.cpython-312.pyc                       0.17 KB
+  build_tracker.cpython-312.pyc                  7.46 KB
+  metadata.cpython-312.pyc                       1.79 KB
+  metadata_editable.cpython-312.pyc              1.84 KB
+  metadata_legacy.cpython-312.pyc                2.92 KB
+  wheel.cpython-312.pyc                          1.61 KB
+  wheel_editable.cpython-312.pyc                 1.95 KB
+  wheel_legacy.cpython-312.pyc                   3.73 KB
+
+venv\Lib\site-packages\pip\_internal\operations\install/
+  __init__.py                                    0.05 KB
+  editable_legacy.py                             1.25 KB
+  wheel.py                                      26.97 KB
+
+venv\Lib\site-packages\pip\_internal\operations\install\__pycache__/
+  __init__.cpython-312.pyc                       0.24 KB
+  editable_legacy.cpython-312.pyc                1.73 KB
+  wheel.cpython-312.pyc                         33.28 KB
+
+venv\Lib\site-packages\pip\_internal\operations\__pycache__/
+  __init__.cpython-312.pyc                       0.17 KB
+  check.cpython-312.pyc                          6.91 KB
+  freeze.cpython-312.pyc                         9.98 KB
+  prepare.cpython-312.pyc                       25.14 KB
+
+venv\Lib\site-packages\pip\_internal\req/
+  __init__.py                                    2.59 KB
+  constructors.py                               18.00 KB
+  req_file.py                                   19.76 KB
+  req_install.py                                34.95 KB
+  req_set.py                                     2.79 KB
+  req_uninstall.py                              23.29 KB
+
+venv\Lib\site-packages\pip\_internal\req\__pycache__/
+  __init__.cpython-312.pyc                       3.34 KB
+  constructors.cpython-312.pyc                  20.73 KB
+  req_file.cpython-312.pyc                      23.65 KB
+  req_install.cpython-312.pyc                   37.54 KB
+  req_set.cpython-312.pyc                        5.33 KB
+  req_uninstall.cpython-312.pyc                 31.32 KB
+
+venv\Lib\site-packages\pip\_internal\resolution/
+  __init__.py                                    0.00 KB
+  base.py                                        0.57 KB
+
+venv\Lib\site-packages\pip\_internal\resolution\legacy/
+  __init__.py                                    0.00 KB
+  resolver.py                                   23.50 KB
+
+venv\Lib\site-packages\pip\_internal\resolution\legacy\__pycache__/
+  __init__.cpython-312.pyc                       0.18 KB
+  resolver.cpython-312.pyc                      22.03 KB
+
+venv\Lib\site-packages\pip\_internal\resolution\resolvelib/
+  __init__.py                                    0.00 KB
+  base.py                                        4.91 KB
+  candidates.py                                 19.53 KB
+  factory.py                                    31.89 KB
+  found_candidates.py                            6.23 KB
+  provider.py                                    9.70 KB
+  reporter.py                                    3.09 KB
+  requirements.py                                7.88 KB
+  resolver.py                                   12.30 KB
+
+venv\Lib\site-packages\pip\_internal\resolution\resolvelib\__pycache__/
+  __init__.cpython-312.pyc                       0.18 KB
+  base.cpython-312.pyc                           7.93 KB
+  candidates.cpython-312.pyc                    28.70 KB
+  factory.cpython-312.pyc                       31.70 KB
+  found_candidates.cpython-312.pyc               6.61 KB
+  provider.cpython-312.pyc                      10.25 KB
+  reporter.cpython-312.pyc                       4.90 KB
+  requirements.cpython-312.pyc                  14.97 KB
+  resolver.cpython-312.pyc                      12.00 KB
+
+venv\Lib\site-packages\pip\_internal\resolution\__pycache__/
+  __init__.cpython-312.pyc                       0.17 KB
+  base.cpython-312.pyc                           1.13 KB
+
+venv\Lib\site-packages\pip\_internal\utils/
+  __init__.py                                    0.00 KB
+  _jaraco_text.py                                3.27 KB
+  _log.py                                        0.99 KB
+  appdirs.py                                     1.63 KB
+  compat.py                                      2.34 KB
+  compatibility_tags.py                          6.12 KB
+  datetime.py                                    0.24 KB
+  deprecation.py                                 3.62 KB
+  direct_url_helpers.py                          3.12 KB
+  egg_link.py                                    2.41 KB
+  entrypoints.py                                 2.99 KB
+  filesystem.py                                  4.83 KB
+  filetypes.py                                   0.70 KB
+  glibc.py                                       3.65 KB
+  hashes.py                                      4.86 KB
+  logging.py                                    11.57 KB
+  misc.py                                       22.90 KB
+  packaging.py                                   2.09 KB
+  retry.py                                       1.36 KB
+  setuptools_build.py                            4.33 KB
+  subprocess.py                                  8.78 KB
+  temp_dir.py                                    9.09 KB
+  unpacking.py                                  11.69 KB
+  urls.py                                        1.56 KB
+  virtualenv.py                                  3.38 KB
+  wheel.py                                       4.39 KB
+
+venv\Lib\site-packages\pip\_internal\utils\__pycache__/
+  __init__.cpython-312.pyc                       0.16 KB
+  _jaraco_text.cpython-312.pyc                   4.40 KB
+  _log.cpython-312.pyc                           1.80 KB
+  appdirs.cpython-312.pyc                        2.33 KB
+  compat.cpython-312.pyc                         2.81 KB
+  compatibility_tags.cpython-312.pyc             6.17 KB
+  datetime.cpython-312.pyc                       0.64 KB
+  deprecation.cpython-312.pyc                    4.07 KB
+  direct_url_helpers.cpython-312.pyc             3.43 KB
+  egg_link.cpython-312.pyc                       3.10 KB
+  entrypoints.cpython-312.pyc                    3.87 KB
+  filesystem.cpython-312.pyc                     7.13 KB
+  filetypes.cpython-312.pyc                      1.11 KB
+  glibc.cpython-312.pyc                          2.34 KB
+  hashes.cpython-312.pyc                         7.40 KB
+  logging.cpython-312.pyc                       13.54 KB
+  misc.cpython-312.pyc                          32.42 KB
+  packaging.cpython-312.pyc                      2.57 KB
+  retry.cpython-312.pyc                          2.03 KB
+  setuptools_build.cpython-312.pyc               4.42 KB
+  subprocess.cpython-312.pyc                     8.41 KB
+  temp_dir.cpython-312.pyc                      11.72 KB
+  unpacking.cpython-312.pyc                     13.16 KB
+  urls.cpython-312.pyc                           2.00 KB
+  virtualenv.cpython-312.pyc                     4.33 KB
+  wheel.cpython-312.pyc                          5.74 KB
+
+venv\Lib\site-packages\pip\_internal\vcs/
+  __init__.py                                    0.58 KB
+  bazaar.py                                      3.45 KB
+  git.py                                        17.75 KB
+  mercurial.py                                   5.13 KB
+  subversion.py                                 11.46 KB
+  versioncontrol.py                             21.91 KB
+
+venv\Lib\site-packages\pip\_internal\vcs\__pycache__/
+  __init__.cpython-312.pyc                       0.50 KB
+  bazaar.cpython-312.pyc                         4.91 KB
+  git.cpython-312.pyc                           18.55 KB
+  mercurial.cpython-312.pyc                      7.40 KB
+  subversion.cpython-312.pyc                    12.21 KB
+  versioncontrol.cpython-312.pyc                28.29 KB
+
+venv\Lib\site-packages\pip\_internal\__pycache__/
+  __init__.cpython-312.pyc                       0.75 KB
+  build_env.cpython-312.pyc                     14.40 KB
+  cache.cpython-312.pyc                         12.35 KB
+  configuration.cpython-312.pyc                 17.19 KB
+  exceptions.cpython-312.pyc                    35.96 KB
+  main.cpython-312.pyc                           0.63 KB
+  pyproject.cpython-312.pyc                      4.97 KB
+  self_outdated_check.cpython-312.pyc           10.14 KB
+  wheel_builder.cpython-312.pyc                 13.27 KB
+
+venv\Lib\site-packages\pip\_vendor/
+  __init__.py                                    4.76 KB
+  typing_extensions.py                         131.35 KB
+  vendor.txt                                     0.33 KB
+
+venv\Lib\site-packages\pip\_vendor\cachecontrol/
+  __init__.py                                    0.66 KB
+  _cmd.py                                        1.70 KB
+  adapter.py                                     6.20 KB
+  cache.py                                       1.91 KB
+  controller.py                                 18.14 KB
+  filewrapper.py                                 4.19 KB
+  heuristics.py                                  4.77 KB
+  py.typed                                       0.00 KB
+  serialize.py                                   5.04 KB
+  wrapper.py                                     1.38 KB
+
+venv\Lib\site-packages\pip\_vendor\cachecontrol\caches/
+  __init__.py                                    0.30 KB
+  file_cache.py                                  5.27 KB
+  redis_cache.py                                 1.35 KB
+
+venv\Lib\site-packages\pip\_vendor\cachecontrol\caches\__pycache__/
+  __init__.cpython-312.pyc                       0.40 KB
+  file_cache.cpython-312.pyc                     7.54 KB
+  redis_cache.cpython-312.pyc                    2.65 KB
+
+venv\Lib\site-packages\pip\_vendor\cachecontrol\__pycache__/
+  __init__.cpython-312.pyc                       0.86 KB
+  _cmd.cpython-312.pyc                           2.56 KB
+  adapter.cpython-312.pyc                        6.29 KB
+  cache.cpython-312.pyc                          3.68 KB
+  controller.cpython-312.pyc                    15.82 KB
+  filewrapper.cpython-312.pyc                    4.22 KB
+  heuristics.cpython-312.pyc                     6.52 KB
+  serialize.cpython-312.pyc                      5.12 KB
+  wrapper.cpython-312.pyc                        1.61 KB
+
+venv\Lib\site-packages\pip\_vendor\certifi/
+  __init__.py                                    0.09 KB
+  __main__.py                                    0.25 KB
+  cacert.pem                                   292.41 KB
+  core.py                                        4.38 KB
+  py.typed                                       0.00 KB
+
+venv\Lib\site-packages\pip\_vendor\certifi\__pycache__/
+  __init__.cpython-312.pyc                       0.29 KB
+  __main__.cpython-312.pyc                       0.61 KB
+  core.cpython-312.pyc                           3.11 KB
+
+venv\Lib\site-packages\pip\_vendor\distlib/
+  __init__.py                                    0.61 KB
+  compat.py                                     40.50 KB
+  database.py                                   49.96 KB
+  index.py                                      20.31 KB
+  locators.py                                   49.83 KB
+  manifest.py                                   13.84 KB
+  markers.py                                     5.04 KB
+  metadata.py                                   37.82 KB
+  resources.py                                  10.57 KB
+  scripts.py                                    18.17 KB
+  t32.exe                                       95.50 KB
+  t64-arm.exe                                  178.50 KB
+  t64.exe                                      105.50 KB
+  util.py                                       65.12 KB
+  version.py                                    23.17 KB
+  w32.exe                                       89.50 KB
+  w64-arm.exe                                  164.50 KB
+  w64.exe                                       99.50 KB
+  wheel.py                                      42.95 KB
+
+venv\Lib\site-packages\pip\_vendor\distlib\__pycache__/
+  __init__.cpython-312.pyc                       1.22 KB
+  compat.cpython-312.pyc                        44.44 KB
+  database.cpython-312.pyc                      64.02 KB
+  index.cpython-312.pyc                         23.72 KB
+  locators.cpython-312.pyc                      58.44 KB
+  manifest.cpython-312.pyc                      14.70 KB
+  markers.cpython-312.pyc                        7.45 KB
+  metadata.cpython-312.pyc                      40.56 KB
+  resources.cpython-312.pyc                     16.88 KB
+  scripts.cpython-312.pyc                       19.27 KB
+  util.cpython-312.pyc                          85.95 KB
+  version.cpython-312.pyc                       29.61 KB
+  wheel.cpython-312.pyc                         51.29 KB
+
+venv\Lib\site-packages\pip\_vendor\distro/
+  __init__.py                                    0.96 KB
+  __main__.py                                    0.06 KB
+  distro.py                                     48.27 KB
+  py.typed                                       0.00 KB
+
+venv\Lib\site-packages\pip\_vendor\distro\__pycache__/
+  __init__.cpython-312.pyc                       0.92 KB
+  __main__.cpython-312.pyc                       0.26 KB
+  distro.cpython-312.pyc                        52.51 KB
+
+venv\Lib\site-packages\pip\_vendor\idna/
+  __init__.py                                    0.85 KB
+  codec.py                                       3.34 KB
+  compat.py                                      0.31 KB
+  core.py                                       12.93 KB
+  idnadata.py                                   76.47 KB
+  intranges.py                                   1.85 KB
+  package_data.py                                0.02 KB
+  py.typed                                       0.00 KB
+  uts46data.py                                 233.68 KB
+
+venv\Lib\site-packages\pip\_vendor\idna\__pycache__/
+  __init__.cpython-312.pyc                       0.84 KB
+  codec.cpython-312.pyc                          4.84 KB
+  compat.cpython-312.pyc                         0.85 KB
+  core.cpython-312.pyc                          15.72 KB
+  idnadata.cpython-312.pyc                      97.12 KB
+  intranges.cpython-312.pyc                      2.55 KB
+  package_data.cpython-312.pyc                   0.19 KB
+  uts46data.cpython-312.pyc                    155.10 KB
+
+venv\Lib\site-packages\pip\_vendor\msgpack/
+  __init__.py                                    1.08 KB
+  exceptions.py                                  1.06 KB
+  ext.py                                         5.59 KB
+  fallback.py                                   31.63 KB
+
+venv\Lib\site-packages\pip\_vendor\msgpack\__pycache__/
+  __init__.cpython-312.pyc                       1.68 KB
+  exceptions.cpython-312.pyc                     1.96 KB
+  ext.cpython-312.pyc                            8.08 KB
+  fallback.cpython-312.pyc                      40.50 KB
+
+venv\Lib\site-packages\pip\_vendor\packaging/
+  __init__.py                                    0.48 KB
+  _elffile.py                                    3.23 KB
+  _manylinux.py                                  9.39 KB
+  _musllinux.py                                  2.63 KB
+  _parser.py                                    10.00 KB
+  _structures.py                                 1.40 KB
+  _tokenizer.py                                  5.15 KB
+  markers.py                                    10.31 KB
+  metadata.py                                   33.95 KB
+  py.typed                                       0.00 KB
+  requirements.py                                2.88 KB
+  specifiers.py                                 39.16 KB
+  tags.py                                       20.52 KB
+  utils.py                                       4.93 KB
+  version.py                                    16.30 KB
+
+venv\Lib\site-packages\pip\_vendor\packaging\licenses/
+  __init__.py                                    5.59 KB
+  _spdx.py                                      47.26 KB
+
+venv\Lib\site-packages\pip\_vendor\packaging\licenses\__pycache__/
+  __init__.cpython-312.pyc                       4.00 KB
+  _spdx.cpython-312.pyc                         46.23 KB
+
+venv\Lib\site-packages\pip\_vendor\packaging\__pycache__/
+  __init__.cpython-312.pyc                       0.52 KB
+  _elffile.cpython-312.pyc                       4.88 KB
+  _manylinux.cpython-312.pyc                     9.46 KB
+  _musllinux.cpython-312.pyc                     4.42 KB
+  _parser.cpython-312.pyc                       13.63 KB
+  _structures.cpython-312.pyc                    3.14 KB
+  _tokenizer.cpython-312.pyc                     7.71 KB
+  markers.cpython-312.pyc                       11.08 KB
+  metadata.cpython-312.pyc                      26.55 KB
+  requirements.cpython-312.pyc                   4.28 KB
+  specifiers.cpython-312.pyc                    38.10 KB
+  tags.cpython-312.pyc                          22.44 KB
+  utils.cpython-312.pyc                          6.46 KB
+  version.cpython-312.pyc                       19.98 KB
+
+venv\Lib\site-packages\pip\_vendor\pkg_resources/
+  __init__.py                                  121.55 KB
+
+venv\Lib\site-packages\pip\_vendor\pkg_resources\__pycache__/
+  __init__.cpython-312.pyc                     157.46 KB
+
+venv\Lib\site-packages\pip\_vendor\platformdirs/
+  __init__.py                                   21.82 KB
+  __main__.py                                    1.47 KB
+  android.py                                     8.80 KB
+  api.py                                         9.03 KB
+  macos.py                                       6.01 KB
+  py.typed                                       0.00 KB
+  unix.py                                       10.15 KB
+  version.py                                     0.40 KB
+  windows.py                                     9.89 KB
+
+venv\Lib\site-packages\pip\_vendor\platformdirs\__pycache__/
+  __init__.cpython-312.pyc                      19.36 KB
+  __main__.cpython-312.pyc                       1.88 KB
+  android.cpython-312.pyc                       10.42 KB
+  api.cpython-312.pyc                           12.97 KB
+  macos.cpython-312.pyc                          8.59 KB
+  unix.cpython-312.pyc                          14.32 KB
+  version.cpython-312.pyc                        0.56 KB
+  windows.cpython-312.pyc                       13.33 KB
+
+venv\Lib\site-packages\pip\_vendor\pygments/
+  __init__.py                                    2.91 KB
+  __main__.py                                    0.34 KB
+  cmdline.py                                    23.10 KB
+  console.py                                     1.68 KB
+  filter.py                                      1.87 KB
+  formatter.py                                   4.29 KB
+  lexer.py                                      34.52 KB
+  modeline.py                                    0.98 KB
+  plugin.py                                      1.85 KB
+  regexopt.py                                    3.00 KB
+  scanner.py                                     3.02 KB
+  sphinxext.py                                   7.79 KB
+  style.py                                       6.27 KB
+  token.py                                       6.08 KB
+  unistring.py                                  61.73 KB
+  util.py                                        9.80 KB
+
+venv\Lib\site-packages\pip\_vendor\pygments\filters/
+  __init__.py                                   39.45 KB
+
+venv\Lib\site-packages\pip\_vendor\pygments\filters\__pycache__/
+  __init__.cpython-312.pyc                      37.00 KB
+
+venv\Lib\site-packages\pip\_vendor\pygments\formatters/
+  __init__.py                                    5.26 KB
+  _mapping.py                                    4.08 KB
+  bbcode.py                                      3.24 KB
+  groff.py                                       4.99 KB
+  html.py                                       34.83 KB
+  img.py                                        22.74 KB
+  irc.py                                         4.86 KB
+  latex.py                                      18.85 KB
+  other.py                                       4.92 KB
+  pangomarkup.py                                 2.17 KB
+  rtf.py                                        11.68 KB
+  svg.py                                         7.01 KB
+  terminal.py                                    4.56 KB
+  terminal256.py                                11.48 KB
+
+venv\Lib\site-packages\pip\_vendor\pygments\formatters\__pycache__/
+  __init__.cpython-312.pyc                       6.72 KB
+  _mapping.cpython-312.pyc                       4.09 KB
+  bbcode.cpython-312.pyc                         4.10 KB
+  groff.cpython-312.pyc                          7.10 KB
+  html.cpython-312.pyc                          40.04 KB
+  img.cpython-312.pyc                           27.86 KB
+  irc.cpython-312.pyc                            5.89 KB
+  latex.cpython-312.pyc                         19.63 KB
+  other.cpython-312.pyc                          6.69 KB
+  pangomarkup.cpython-312.pyc                    2.87 KB
+  rtf.cpython-312.pyc                           13.43 KB
+  svg.cpython-312.pyc                            8.90 KB
+  terminal.cpython-312.pyc                       5.66 KB
+  terminal256.cpython-312.pyc                   14.74 KB
+
+venv\Lib\site-packages\pip\_vendor\pygments\lexers/
+  __init__.py                                   11.83 KB
+  _mapping.py                                   74.31 KB
+  python.py                                     52.43 KB
+
+venv\Lib\site-packages\pip\_vendor\pygments\lexers\__pycache__/
+  __init__.cpython-312.pyc                      14.26 KB
+  _mapping.cpython-312.pyc                      66.64 KB
+  python.cpython-312.pyc                        41.94 KB
+
+venv\Lib\site-packages\pip\_vendor\pygments\styles/
+  __init__.py                                    1.99 KB
+  _mapping.py                                    3.23 KB
+
+venv\Lib\site-packages\pip\_vendor\pygments\styles\__pycache__/
+  __init__.cpython-312.pyc                       2.58 KB
+  _mapping.cpython-312.pyc                       3.54 KB
+
+venv\Lib\site-packages\pip\_vendor\pygments\__pycache__/
+  __init__.cpython-312.pyc                       3.38 KB
+  __main__.cpython-312.pyc                       0.70 KB
+  cmdline.cpython-312.pyc                       25.94 KB
+  console.cpython-312.pyc                        2.54 KB
+  filter.cpython-312.pyc                         3.12 KB
+  formatter.cpython-312.pyc                      4.59 KB
+  lexer.cpython-312.pyc                         37.44 KB
+  modeline.cpython-312.pyc                       1.50 KB
+  plugin.cpython-312.pyc                         2.53 KB
+  regexopt.cpython-312.pyc                       3.96 KB
+  scanner.cpython-312.pyc                        4.62 KB
+  sphinxext.cpython-312.pyc                     11.79 KB
+  style.cpython-312.pyc                          6.51 KB
+  token.cpython-312.pyc                          7.98 KB
+  unistring.cpython-312.pyc                     32.18 KB
+  util.cpython-312.pyc                          13.72 KB
+
+venv\Lib\site-packages\pip\_vendor\pyproject_hooks/
+  __init__.py                                    0.67 KB
+  _impl.py                                      14.59 KB
+  py.typed                                       0.00 KB
+
+venv\Lib\site-packages\pip\_vendor\pyproject_hooks\_in_process/
+  __init__.py                                    0.54 KB
+  _in_process.py                                11.93 KB
+
+venv\Lib\site-packages\pip\_vendor\pyproject_hooks\_in_process\__pycache__/
+  __init__.cpython-312.pyc                       1.03 KB
+  _in_process.cpython-312.pyc                   14.93 KB
+
+venv\Lib\site-packages\pip\_vendor\pyproject_hooks\__pycache__/
+  __init__.cpython-312.pyc                       0.71 KB
+  _impl.cpython-312.pyc                         17.60 KB
+
+venv\Lib\site-packages\pip\_vendor\requests/
+  __init__.py                                    4.94 KB
+  __version__.py                                 0.42 KB
+  _internal_utils.py                             1.46 KB
+  adapters.py                                   26.96 KB
+  api.py                                         6.30 KB
+  auth.py                                        9.95 KB
+  certs.py                                       0.43 KB
+  compat.py                                      1.45 KB
+  cookies.py                                    18.15 KB
+  exceptions.py                                  4.17 KB
+  help.py                                        3.72 KB
+  hooks.py                                       0.72 KB
+  models.py                                     34.65 KB
+  packages.py                                    1.03 KB
+  sessions.py                                   29.78 KB
+  status_codes.py                                4.22 KB
+  structures.py                                  2.84 KB
+  utils.py                                      32.84 KB
+
+venv\Lib\site-packages\pip\_vendor\requests\__pycache__/
+  __init__.cpython-312.pyc                       5.11 KB
+  __version__.cpython-312.pyc                    0.55 KB
+  _internal_utils.cpython-312.pyc                1.96 KB
+  adapters.cpython-312.pyc                      27.74 KB
+  api.cpython-312.pyc                            7.00 KB
+  auth.cpython-312.pyc                          13.57 KB
+  certs.cpython-312.pyc                          0.64 KB
+  compat.cpython-312.pyc                         1.62 KB
+  cookies.cpython-312.pyc                       24.59 KB
+  exceptions.cpython-312.pyc                     7.40 KB
+  help.cpython-312.pyc                           4.11 KB
+  hooks.cpython-312.pyc                          1.00 KB
+  models.cpython-312.pyc                        34.58 KB
+  packages.cpython-312.pyc                       1.21 KB
+  sessions.cpython-312.pyc                      27.17 KB
+  status_codes.cpython-312.pyc                   5.86 KB
+  structures.cpython-312.pyc                     5.47 KB
+  utils.cpython-312.pyc                         35.49 KB
+
+venv\Lib\site-packages\pip\_vendor\resolvelib/
+  __init__.py                                    0.52 KB
+  providers.py                                   5.73 KB
+  py.typed                                       0.00 KB
+  reporters.py                                   1.56 KB
+  resolvers.py                                  20.03 KB
+  structs.py                                     4.85 KB
+
+venv\Lib\site-packages\pip\_vendor\resolvelib\compat/
+  __init__.py                                    0.00 KB
+  collections_abc.py                             0.15 KB
+
+venv\Lib\site-packages\pip\_vendor\resolvelib\compat\__pycache__/
+  __init__.cpython-312.pyc                       0.17 KB
+  collections_abc.cpython-312.pyc                0.39 KB
+
+venv\Lib\site-packages\pip\_vendor\resolvelib\__pycache__/
+  __init__.cpython-312.pyc                       0.60 KB
+  providers.cpython-312.pyc                      6.67 KB
+  reporters.cpython-312.pyc                      2.57 KB
+  resolvers.cpython-312.pyc                     25.25 KB
+  structs.cpython-312.pyc                       10.23 KB
+
+venv\Lib\site-packages\pip\_vendor\rich/
+  __init__.py                                    5.95 KB
+  __main__.py                                    8.28 KB
+  _cell_widths.py                                9.97 KB
+  _emoji_codes.py                              136.95 KB
+  _emoji_replace.py                              1.04 KB
+  _export_format.py                              2.08 KB
+  _extension.py                                  0.26 KB
+  _fileno.py                                     0.78 KB
+  _inspect.py                                    9.43 KB
+  _log_render.py                                 3.15 KB
+  _loop.py                                       1.21 KB
+  _null_file.py                                  1.36 KB
+  _palettes.py                                   6.90 KB
+  _pick.py                                       0.41 KB
+  _ratio.py                                      5.34 KB
+  _spinners.py                                  19.45 KB
+  _stack.py                                      0.34 KB
+  _timer.py                                      0.41 KB
+  _win32_console.py                             22.22 KB
+  _windows.py                                    1.88 KB
+  _windows_renderer.py                           2.72 KB
+  _wrap.py                                       3.32 KB
+  abc.py                                         0.87 KB
+  align.py                                      10.22 KB
+  ansi.py                                        6.76 KB
+  bar.py                                         3.19 KB
+  box.py                                        10.58 KB
+  cells.py                                       5.01 KB
+  color.py                                      17.78 KB
+  color_triplet.py                               1.03 KB
+  columns.py                                     6.96 KB
+  console.py                                    97.81 KB
+  constrain.py                                   1.26 KB
+  containers.py                                  5.37 KB
+  control.py                                     6.47 KB
+  default_styles.py                              7.97 KB
+  diagnose.py                                    0.95 KB
+  emoji.py                                       2.44 KB
+  errors.py                                      0.63 KB
+  file_proxy.py                                  1.64 KB
+  filesize.py                                    2.43 KB
+  highlighter.py                                 9.36 KB
+  json.py                                        4.91 KB
+  jupyter.py                                     3.18 KB
+  layout.py                                     13.68 KB
+  live.py                                       13.94 KB
+  live_render.py                                 3.58 KB
+  logging.py                                    12.17 KB
+  markup.py                                      8.25 KB
+  measure.py                                     5.18 KB
+  padding.py                                     4.79 KB
+  pager.py                                       0.81 KB
+  palette.py                                     3.32 KB
+  panel.py                                      10.97 KB
+  pretty.py                                     35.54 KB
+  progress.py                                   58.94 KB
+  progress_bar.py                                7.97 KB
+  prompt.py                                     12.16 KB
+  protocol.py                                    1.36 KB
+  py.typed                                       0.00 KB
+  region.py                                      0.16 KB
+  repr.py                                        4.33 KB
+  rule.py                                        4.49 KB
+  scope.py                                       2.78 KB
+  screen.py                                      1.55 KB
+  segment.py                                    24.16 KB
+  spinner.py                                     4.26 KB
+  status.py                                      4.32 KB
+  style.py                                      26.43 KB
+  styled.py                                      1.23 KB
+  syntax.py                                     34.92 KB
+  table.py                                      39.16 KB
+  terminal_theme.py                              3.29 KB
+  text.py                                       46.44 KB
+  theme.py                                       3.68 KB
+  themes.py                                      0.10 KB
+  traceback.py                                  31.05 KB
+  tree.py                                        9.23 KB
+
+venv\Lib\site-packages\pip\_vendor\rich\__pycache__/
+  __init__.cpython-312.pyc                       6.83 KB
+  __main__.cpython-312.pyc                      10.03 KB
+  _cell_widths.cpython-312.pyc                   7.67 KB
+  _emoji_codes.cpython-312.pyc                 201.13 KB
+  _emoji_replace.cpython-312.pyc                 1.67 KB
+  _export_format.cpython-312.pyc                 2.27 KB
+  _extension.cpython-312.pyc                     0.50 KB
+  _fileno.cpython-312.pyc                        0.81 KB
+  _inspect.cpython-312.pyc                      11.72 KB
+  _log_render.cpython-312.pyc                    4.03 KB
+  _loop.cpython-312.pyc                          1.80 KB
+  _null_file.cpython-312.pyc                     3.52 KB
+  _palettes.cpython-312.pyc                      5.02 KB
+  _pick.cpython-312.pyc                          0.68 KB
+  _ratio.cpython-312.pyc                         6.39 KB
+  _spinners.cpython-312.pyc                     12.85 KB
+  _stack.cpython-312.pyc                         0.92 KB
+  _timer.cpython-312.pyc                         0.82 KB
+  _win32_console.cpython-312.pyc                28.11 KB
+  _windows.cpython-312.pyc                       2.41 KB
+  _windows_renderer.cpython-312.pyc              3.46 KB
+  _wrap.cpython-312.pyc                          3.23 KB
+  abc.cpython-312.pyc                            1.55 KB
+  align.cpython-312.pyc                         12.08 KB
+  ansi.cpython-312.pyc                           8.85 KB
+  bar.cpython-312.pyc                            4.15 KB
+  box.cpython-312.pyc                           11.54 KB
+  cells.cpython-312.pyc                          5.41 KB
+  color.cpython-312.pyc                         25.91 KB
+  color_triplet.cpython-312.pyc                  1.64 KB
+  columns.cpython-312.pyc                        8.36 KB
+  console.cpython-312.pyc                      111.84 KB
+  constrain.cpython-312.pyc                      2.18 KB
+  containers.cpython-312.pyc                     8.97 KB
+  control.cpython-312.pyc                       10.66 KB
+  default_styles.cpython-312.pyc                10.17 KB
+  diagnose.cpython-312.pyc                       1.43 KB
+  emoji.cpython-312.pyc                          4.09 KB
+  errors.cpython-312.pyc                         1.78 KB
+  file_proxy.cpython-312.pyc                     3.47 KB
+  filesize.cpython-312.pyc                       2.95 KB
+  highlighter.cpython-312.pyc                    9.63 KB
+  json.cpython-312.pyc                           5.87 KB
+  jupyter.cpython-312.pyc                        5.06 KB
+  layout.cpython-312.pyc                        19.66 KB
+  live.cpython-312.pyc                          18.54 KB
+  live_render.cpython-312.pyc                    4.75 KB
+  logging.cpython-312.pyc                       13.71 KB
+  markup.cpython-312.pyc                         9.32 KB
+  measure.cpython-312.pyc                        6.21 KB
+  padding.cpython-312.pyc                        6.75 KB
+  pager.cpython-312.pyc                          1.75 KB
+  palette.cpython-312.pyc                        5.15 KB
+  panel.cpython-312.pyc                         12.45 KB
+  pretty.cpython-312.pyc                        39.64 KB
+  progress.cpython-312.pyc                      73.94 KB
+  progress_bar.cpython-312.pyc                  10.11 KB
+  prompt.cpython-312.pyc                        15.61 KB
+  protocol.cpython-312.pyc                       1.73 KB
+  region.cpython-312.pyc                         0.53 KB
+  repr.cpython-312.pyc                           6.44 KB
+  rule.cpython-312.pyc                           6.39 KB
+  scope.cpython-312.pyc                          3.71 KB
+  screen.cpython-312.pyc                         2.40 KB
+  segment.cpython-312.pyc                       27.85 KB
+  spinner.cpython-312.pyc                        5.93 KB
+  status.cpython-312.pyc                         5.90 KB
+  style.cpython-312.pyc                         32.67 KB
+  styled.cpython-312.pyc                         2.07 KB
+  syntax.cpython-312.pyc                        39.22 KB
+  table.cpython-312.pyc                         42.83 KB
+  terminal_theme.cpython-312.pyc                 3.25 KB
+  text.cpython-312.pyc                          59.75 KB
+  theme.cpython-312.pyc                          6.16 KB
+  themes.cpython-312.pyc                         0.29 KB
+  traceback.cpython-312.pyc                     32.10 KB
+  tree.cpython-312.pyc                          11.50 KB
+
+venv\Lib\site-packages\pip\_vendor\tomli/
+  __init__.py                                    0.31 KB
+  _parser.py                                    24.99 KB
+  _re.py                                         3.10 KB
+  _types.py                                      0.25 KB
+  py.typed                                       0.03 KB
+
+venv\Lib\site-packages\pip\_vendor\tomli\__pycache__/
+  __init__.cpython-312.pyc                       0.31 KB
+  _parser.cpython-312.pyc                       28.64 KB
+  _re.cpython-312.pyc                            3.92 KB
+  _types.cpython-312.pyc                         0.34 KB
+
+venv\Lib\site-packages\pip\_vendor\truststore/
+  __init__.py                                    1.23 KB
+  _api.py                                       10.31 KB
+  _macos.py                                     20.02 KB
+  _openssl.py                                    2.27 KB
+  _ssl_constants.py                              1.10 KB
+  _windows.py                                   17.57 KB
+  py.typed                                       0.00 KB
+
+venv\Lib\site-packages\pip\_vendor\truststore\__pycache__/
+  __init__.cpython-312.pyc                       1.29 KB
+  _api.cpython-312.pyc                          16.36 KB
+  _macos.cpython-312.pyc                        18.52 KB
+  _openssl.cpython-312.pyc                       2.13 KB
+  _ssl_constants.cpython-312.pyc                 1.05 KB
+  _windows.cpython-312.pyc                      15.37 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3/
+  __init__.py                                    3.25 KB
+  _collections.py                               11.11 KB
+  _version.py                                    0.06 KB
+  connection.py                                 19.84 KB
+  connectionpool.py                             39.46 KB
+  exceptions.py                                  8.02 KB
+  fields.py                                      8.38 KB
+  filepost.py                                    2.38 KB
+  poolmanager.py                                19.52 KB
+  request.py                                     6.53 KB
+  response.py                                   29.92 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\contrib/
+  __init__.py                                    0.00 KB
+  _appengine_environ.py                          0.93 KB
+  appengine.py                                  10.78 KB
+  ntlmpool.py                                    4.42 KB
+  pyopenssl.py                                  16.68 KB
+  securetransport.py                            33.64 KB
+  socks.py                                       6.93 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\contrib\_securetransport/
+  __init__.py                                    0.00 KB
+  bindings.py                                   17.22 KB
+  low_level.py                                  13.60 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\contrib\_securetransport\__pycache__/
+  __init__.cpython-312.pyc                       0.19 KB
+  bindings.cpython-312.pyc                      17.00 KB
+  low_level.cpython-312.pyc                     14.40 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\contrib\__pycache__/
+  __init__.cpython-312.pyc                       0.17 KB
+  _appengine_environ.cpython-312.pyc             1.78 KB
+  appengine.cpython-312.pyc                     11.27 KB
+  ntlmpool.cpython-312.pyc                       5.56 KB
+  pyopenssl.cpython-312.pyc                     23.85 KB
+  securetransport.cpython-312.pyc               34.65 KB
+  socks.cpython-312.pyc                          7.31 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\packages/
+  __init__.py                                    0.00 KB
+  six.py                                        33.85 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\packages\backports/
+  __init__.py                                    0.00 KB
+  makefile.py                                    1.38 KB
+  weakref_finalize.py                            5.22 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\packages\backports\__pycache__/
+  __init__.cpython-312.pyc                       0.18 KB
+  makefile.cpython-312.pyc                       1.76 KB
+  weakref_finalize.cpython-312.pyc               7.14 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\packages\__pycache__/
+  __init__.cpython-312.pyc                       0.17 KB
+  six.cpython-312.pyc                           40.27 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\util/
+  __init__.py                                    1.13 KB
+  connection.py                                  4.79 KB
+  proxy.py                                       1.57 KB
+  queue.py                                       0.49 KB
+  request.py                                     3.90 KB
+  response.py                                    3.43 KB
+  retry.py                                      21.53 KB
+  ssl_.py                                       17.05 KB
+  ssl_match_hostname.py                          5.62 KB
+  ssltransport.py                                6.73 KB
+  timeout.py                                     9.93 KB
+  url.py                                        13.96 KB
+  wait.py                                        5.28 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\util\__pycache__/
+  __init__.cpython-312.pyc                       1.10 KB
+  connection.cpython-312.pyc                     4.61 KB
+  proxy.cpython-312.pyc                          1.49 KB
+  queue.cpython-312.pyc                          1.30 KB
+  request.cpython-312.pyc                        4.06 KB
+  response.cpython-312.pyc                       2.90 KB
+  retry.cpython-312.pyc                         21.19 KB
+  ssl_.cpython-312.pyc                          14.98 KB
+  ssl_match_hostname.cpython-312.pyc             4.91 KB
+  ssltransport.cpython-312.pyc                  10.48 KB
+  timeout.cpython-312.pyc                       10.86 KB
+  url.cpython-312.pyc                           15.39 KB
+  wait.cpython-312.pyc                           4.28 KB
+
+venv\Lib\site-packages\pip\_vendor\urllib3\__pycache__/
+  __init__.cpython-312.pyc                       3.30 KB
+  _collections.cpython-312.pyc                  15.96 KB
+  _version.cpython-312.pyc                       0.19 KB
+  connection.cpython-312.pyc                    19.90 KB
+  connectionpool.cpython-312.pyc                35.66 KB
+  exceptions.cpython-312.pyc                    13.16 KB
+  fields.cpython-312.pyc                        10.14 KB
+  filepost.cpython-312.pyc                       3.90 KB
+  poolmanager.cpython-312.pyc                   19.93 KB
+  request.cpython-312.pyc                        7.10 KB
+  response.cpython-312.pyc                      33.13 KB
+
+venv\Lib\site-packages\pip\_vendor\__pycache__/
+  __init__.cpython-312.pyc                       4.42 KB
+  typing_extensions.cpython-312.pyc            136.16 KB
+
+venv\Lib\site-packages\pip\__pycache__/
+  __init__.cpython-312.pyc                       0.65 KB
+  __main__.cpython-312.pyc                       0.80 KB
+  __pip-runner__.cpython-312.pyc                 2.13 KB
+
+venv\Lib\site-packages\pip-25.0.1.dist-info/
+  AUTHORS.txt                                   10.76 KB
+  INSTALLER                                      0.00 KB
+  LICENSE.txt                                    1.07 KB
+  METADATA                                       3.59 KB
+  RECORD                                        64.20 KB
+  REQUESTED                                      0.00 KB
+  WHEEL                                          0.09 KB
+  entry_points.txt                               0.08 KB
+  top_level.txt                                  0.00 KB
+
+venv\Scripts/
+  Activate.ps1                                  27.32 KB
+  activate                                       2.12 KB
+  activate.bat                                   0.97 KB
+  deactivate.bat                                 0.38 KB
+  pip.exe                                      105.86 KB
+  pip3.12.exe                                  105.86 KB
+  pip3.exe                                     105.86 KB
+  python.exe                                   267.99 KB
+  pythonw.exe                                  257.23 KB
+
+================================================================================
+End of Workspace Summary
+================================================================================
+
+
+================================================================================
+FILE: xgboost_cprd.py
+================================================================================
+import pandas as pd
+import joblib
+import warnings
+from xgboost import XGBClassifier
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.metrics import accuracy_score, classification_report
+
+# Suppress XGBoost warnings for a clean presentation
+warnings.filterwarnings('ignore')
+
+def load_and_prep_data(filepath):
+    print("--- Loading and Engineering Features ---")
+    df = pd.read_csv(filepath)
+    df['Date'] = pd.to_datetime(df['Date'])
+    df.set_index('Date', inplace=True)
+    
+    # Separate features and target
+    X = df.drop(columns=['Target_Appreciation'])
+    y = df['Target_Appreciation']
+    
+    # Stationarity: Convert all prices to daily % changes
+    # This prevents the model from overfitting to raw price levels
+    X = X.pct_change() * 100
+    
+    # Drop NaNs created by pct_change and rolling windows
+    X.dropna(inplace=True)
+    y = y.loc[X.index]
+    
+    print(f"Dataset ready. Training on {len(X)} days with {X.shape[1]} features.")
+    return X, y
+
+def train_and_evaluate():
+    X, y = load_and_prep_data('inr_macro_dataset.csv')
+    
+    # IMPORTANT: shuffle=False for time-series data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+    
+    print("Tuning XGBoost hyperparameters (This may take a moment)...")
+    # Using XGBClassifier for classification
+    xgb = XGBClassifier(eval_metric='logloss')
+    
+    # Grid search for the best model parameters
+    param_grid = {
+        'max_depth': [3, 5, 7],
+        'n_estimators': [100, 200, 300],
+        'learning_rate': [0.01, 0.05, 0.1]
+    }
+    
+    grid = GridSearchCV(xgb, param_grid, cv=3, scoring='accuracy')
+    grid.fit(X_train, y_train)
+    
+    best_model = grid.best_estimator_
+    print(f"Best Parameters Found: {grid.best_params_}")
+    
+    # Save the model
+    joblib.dump(best_model, 'inr_predictor_model.pkl')
+    print("Model saved as 'inr_predictor_model.pkl'.")
+    
+    # Evaluate
+    preds = best_model.predict(X_test)
+    print(f"\nFinal Model Accuracy: {accuracy_score(y_test, preds) * 100:.2f}%")
+    print("\nClassification Report:")
+    print(classification_report(y_test, preds))
+    
+    # Display Feature Importances for your presentation
+    importances = pd.Series(best_model.feature_importances_, index=X.columns)
+    print("\nTop Contributing Features:")
+    print(importances.sort_values(ascending=False).head(10))
+
+if __name__ == "__main__":
+    train_and_evaluate()
+
